@@ -9,3 +9,4 @@ cpmm/package-lock.json
 cpmm/yarn.lock
 cpmm/Cargo.lock
 /cpmm/.idea/
+.idea
