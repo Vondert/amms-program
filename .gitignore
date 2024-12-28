@@ -1,0 +1,11 @@
+/cpmm/.anchor
+.DS_Store
+cpmm/target
+**/*.rs.bk
+/cpmm/node_modules
+cpmm/test-ledger
+cpmm/.yarn
+cpmm/package-lock.json
+cpmm/yarn.lock
+cpmm/Cargo.lock
+/cpmm/.idea
