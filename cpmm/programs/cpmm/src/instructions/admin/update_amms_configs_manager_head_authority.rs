@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use crate::constants::{AMMS_CONFIG_MANAGER_SEED};
 use crate::state::AmmsConfigsManager;
 
 #[derive(Accounts)]
@@ -11,14 +10,14 @@ pub struct UpdateAmmsConfigsManagerHeadAuthority<'info> {
     head_authority: Signer<'info>,
     #[account(
         mut,
-        seeds = [AMMS_CONFIG_MANAGER_SEED],
+        seeds = [AmmsConfigsManager::SEED],
         bump = amms_configs_manager.bump
     )]
     amms_configs_manager: Account<'info, AmmsConfigsManager>,
     /// CHECK: New head authority can be arbitrary
     new_head_authority: UncheckedAccount<'info>,
 }
-pub fn handler(ctx: Context<UpdateAmmsConfigsManagerHeadAuthority>) -> Result<()> {
+pub(crate) fn handler(ctx: Context<UpdateAmmsConfigsManagerHeadAuthority>) -> Result<()> {
     ctx.accounts.amms_configs_manager.update_head_authority(
         ctx.accounts.new_head_authority.key()
     );

@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("6ysJYaHRoUDJomWh3bmpKEdHzEfVEM4LgfQJU2DVRDu3");
+declare_id!("2wFPV42nma7Lv8fqfUEtzBYGoiZybowLxFokaGGMqGCg");
 
 pub mod constants;
 pub mod error;
@@ -24,5 +24,14 @@ pub mod cpmm {
 
     pub fn update_amms_configs_manager_head_authority(ctx: Context<UpdateAmmsConfigsManagerHeadAuthority>) -> Result<()>{
         update_amms_configs_manager_head_authority::handler(ctx)
+    }
+
+
+    pub fn initialize_amms_config(ctx: Context<InitializeAmmsConfig>, fee_rate: u16) -> Result<()>{
+        initialize_amms_config::handler(ctx, fee_rate)
+    }
+
+    pub fn update_amms_config_fee_authority(ctx: Context<UpdateAmmsConfigFeeAuthority>) -> Result<()>{
+        update_amms_config_fee_authority::handler(ctx)
     }
 }

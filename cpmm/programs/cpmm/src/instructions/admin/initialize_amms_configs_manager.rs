@@ -1,6 +1,6 @@
 use anchor_lang::Accounts;
 use anchor_lang::prelude::*;
-use crate::constants::{AMMS_CONFIG_MANAGER_INITIALIZE_AUTHORITY_PUBKEY, AMMS_CONFIG_MANAGER_SEED};
+use crate::constants::{AMMS_CONFIG_MANAGER_INITIALIZE_AUTHORITY_PUBKEY, ANCHOR_DISCRIMINATOR};
 use crate::state::AmmsConfigsManager;
 
 #[derive(Accounts)]
@@ -10,8 +10,8 @@ pub struct InitializeAmmsConfigsManager<'info>{
     #[account(
         init,
         payer = signer,
-        space = 8 + AmmsConfigsManager::INIT_SPACE,
-        seeds = [AMMS_CONFIG_MANAGER_SEED],
+        space = ANCHOR_DISCRIMINATOR + AmmsConfigsManager::INIT_SPACE,
+        seeds = [AmmsConfigsManager::SEED],
         bump
     )]
     pub amms_configs_manager: Account<'info, AmmsConfigsManager>,
@@ -24,7 +24,7 @@ pub struct InitializeAmmsConfigsManager<'info>{
     pub system_program: Program<'info, System>
 }
 
-pub fn handler(ctx: Context<InitializeAmmsConfigsManager>) -> Result<()> {
+pub(crate) fn handler(ctx: Context<InitializeAmmsConfigsManager>) -> Result<()> {
     ctx.accounts.amms_configs_manager.initialize(
         ctx.accounts.authority.key(),
         ctx.accounts.head_authority.key(),

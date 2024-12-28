@@ -11,6 +11,7 @@ pub struct AmmsConfigsManager {
 }
 
 impl AmmsConfigsManager {
+    pub const SEED: &'static [u8] = b"amms_configs_manager";
     pub fn initialize(&mut self, authority: Pubkey, head_authority: Pubkey, bump: u8) -> () {
         self.bump = bump;
         self.configs_count = 0;
