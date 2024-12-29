@@ -30,11 +30,11 @@ pub struct InitializeAmmsConfig<'info> {
     system_program: Program<'info, System>,
 }
 
-pub(crate) fn handler(ctx: Context<InitializeAmmsConfig>, fee_rate: u16) -> Result<()> {
-    require!(fee_rate <= 10000, ErrorCode::ConfigFeeRateExceeded);
+pub(crate) fn handler(ctx: Context<InitializeAmmsConfig>, fee_rate_basis_points: u16) -> Result<()> {
+    require!(fee_rate_basis_points <= 10000, ErrorCode::ConfigFeeRateExceeded);
     ctx.accounts.amms_config.initialize(
         ctx.accounts.fee_authority.key(),
-        fee_rate,
+        fee_rate_basis_points,
         ctx.accounts.amms_configs_manager.configs_count,
         ctx.bumps.amms_config
     );

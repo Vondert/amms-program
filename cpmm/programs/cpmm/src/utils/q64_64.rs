@@ -1,15 +1,10 @@
 use super::U256;
 use std::ops::{Add, Div, Mul, Sub};
+use anchor_lang::{AnchorDeserialize, AnchorSerialize, prelude::borsh, InitSpace};
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct Q64_64 {
     value: u128,
-}
-
-impl Default for Q64_64 {
-    fn default() -> Q64_64 {
-        Q64_64 { value: 0 }
-    }
 }
 
 impl Q64_64 {
@@ -17,7 +12,7 @@ impl Q64_64 {
     pub const FRACTIONAL_MASK: u128 = (1u128 << Self::FRACTIONAL_BITS) - 1;
     pub const MAX: Self = Q64_64 { value: u128::MAX };
     pub fn new(value: u128) -> Self {
-        Q64_64 { value: value }
+        Q64_64 { value }
     }
     pub fn from_u128(value: u128) -> Self {
         Self {
@@ -81,8 +76,7 @@ impl Q64_64 {
     }
 
     pub fn square_as_u128(self) -> u128 {
-        let result =
-            (U256::from(self.value) * U256::from(self.value)) >> (Self::FRACTIONAL_BITS * 2);
+        let result = (U256::from(self.value) * U256::from(self.value)) >> (Self::FRACTIONAL_BITS * 2);
         result.as_u128()
     }
 }
@@ -107,7 +101,7 @@ impl Sub for Q64_64 {
 impl Mul for Q64_64 {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self::Output {
-        let result = U256::from(self.value) * U256::from(rhs.value) >> Q64_64::FRACTIONAL_BITS;
+        let result = (U256::from(self.value) * U256::from(rhs.value)) >> Q64_64::FRACTIONAL_BITS;
         Self {
             value: result.as_u128(),
         }
@@ -125,5 +119,19 @@ impl Div for Q64_64 {
         Self {
             value: result.as_u128(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Q64_64;
+    
+    #[test]
+    fn test_add() {
+        let a = Q64_64::sqrt_from_u128(1);
+        let b = Q64_64::sqrt_from_u128(u64::MAX as u128);
+        let result = (a / b).split();
+        println!("{:?}.{:?}", result.0.to_be_bytes(), result.1.to_be_bytes());
+        assert_eq!(result.0, result.1);
     }
 }

@@ -27,8 +27,8 @@ pub mod cpmm {
     }
 
 
-    pub fn initialize_amms_config(ctx: Context<InitializeAmmsConfig>, fee_rate: u16) -> Result<()>{
-        initialize_amms_config::handler(ctx, fee_rate)
+    pub fn initialize_amms_config(ctx: Context<InitializeAmmsConfig>, fee_rate_basis_points: u16) -> Result<()>{
+        initialize_amms_config::handler(ctx, fee_rate_basis_points)
     }
 
     pub fn update_amms_config_fee_authority(ctx: Context<UpdateAmmsConfigFeeAuthority>) -> Result<()>{
