@@ -1,21 +1,21 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::{
+    token::{Mint, Token, TokenAccount},
+    token_interface
+};
 use crate::state::{AmmsConfig, CpAmm};
+use crate::utils::validate_tradable_mint;
 
 #[derive(Accounts)]
 pub struct InitializeCpAmm<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
+    pub base_mint: Box<InterfaceAccount<'info, token_interface::Mint>>,
     #[account(
-        constraint = base_mint.freeze_authority.is_none()
+        constraint = base_mint.key() != quote_mint.key()
     )]
-    pub base_mint: Box<Account<'info, Mint>>,
-    #[account(
-        constraint = base_mint.key() != quote_mint.key(),
-        constraint = quote_mint.freeze_authority.is_none()
-    )]
-    pub quote_mint: Box<Account<'info, Mint>>,
+    pub quote_mint: Box<InterfaceAccount<'info, token_interface::Mint>>,
     
     #[account(
         init,
@@ -71,13 +71,28 @@ pub struct InitializeCpAmm<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
+impl<'info> InitializeCpAmm<'info>{
+    fn validate_base_mint(&self) -> Result<()> {
+        let base_mint = self.base_mint.as_ref();
+        validate_tradable_mint(base_mint)
+    }
+    fn validate_quote_mint(&self) -> Result<()> {
+        let quote_mint = self.quote_mint.as_ref();
+        validate_tradable_mint(quote_mint)
+    }
+}
 
 pub(crate) fn handler(ctx: Context<InitializeCpAmm>) -> Result<()> {
-    ctx.accounts.cp_amm.initialize(
-        &ctx.accounts.base_mint,
-        &ctx.accounts.quote_mint,
-        &ctx.accounts.lp_mint,
-        &ctx.accounts.amms_config,
+    let accounts = ctx.accounts;
+    
+    accounts.validate_base_mint()?;
+    accounts.validate_quote_mint()?;
+    
+    accounts.cp_amm.initialize(
+        &accounts.base_mint,
+        &accounts.quote_mint,
+        &accounts.lp_mint,
+        &accounts.amms_config,
         ctx.bumps.cp_amm
     );
     Ok(())

@@ -1,6 +1,7 @@
 use anchor_lang::{account, InitSpace};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Mint;
+use anchor_spl::token_interface;
 use crate::utils::Q64_64;
 use crate::error::ErrorCode;
 use crate::state::AmmsConfig;
@@ -8,7 +9,7 @@ use crate::state::AmmsConfig;
 #[account]
 #[derive(InitSpace)]
 pub struct CpAmm {
-    is_launched: bool, // 1
+    pub is_launched: bool, // 1
     // Base liquidity that will be locked forever after pool launch
     // Used for stabilizing pool if empty
     initial_locked_base_liquidity: u64, // 8
@@ -41,21 +42,21 @@ pub struct CpAmm {
     protocol_quote_fees_to_redeem: u64, // 8
     
     // Mint of the base token
-    base_mint: Pubkey,  // 32
+    pub base_mint: Pubkey,  // 32
     // Mint of the quote token
-    quote_mint: Pubkey, // 32
+    pub quote_mint: Pubkey, // 32
     // Mint of the liquidity token
-    lp_mint: Pubkey,    // 32
+    pub lp_mint: Pubkey,    // 32
     
     // Liquidity vault with base tokens
-    base_vault: Pubkey, // 32
+    pub base_vault: Pubkey, // 32
     // Liquidity vault with quote tokens
-    quote_vault: Pubkey, // 32
+    pub quote_vault: Pubkey, // 32
     
     // AmmsConfig account
-    amms_config: Pubkey, // 32
+    pub amms_config: Pubkey, // 32
     // Canonical bump
-    bump: u8, // 1
+    pub bump: u8, // 1
 }
 
 impl CpAmm {
@@ -154,8 +155,8 @@ impl CpAmm {
     
     pub fn initialize(
         &mut self,
-        base_mint: &Account<Mint>, 
-        quote_mint: &Account<Mint>, 
+        base_mint: &InterfaceAccount<token_interface::Mint>,
+        quote_mint: &InterfaceAccount<token_interface::Mint>,
         lp_mint: &Account<Mint>,
         amms_config: &Account<AmmsConfig>,
         bump: u8,

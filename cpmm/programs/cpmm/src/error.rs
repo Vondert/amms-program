@@ -27,6 +27,14 @@ pub enum ErrorCode {
     AdjustLiquidityRatioToleranceExceeded,
     
     #[msg("Provided total fee for CpAmm exceeds the maximum allowed value of 10000 basis points (100%).")]
-    CpAmmFeeRateExceeded
-    
+    CpAmmFeeRateExceeded,
+
+    #[msg("Tradable mint for CpAmm has freeze authority.")]
+    MintHasFreezeAuthority,
+
+    #[msg("Tradable mint for CpAmm owned by unsupported token program.")]
+    UnsupportedTradableMint,
+
+    #[msg("Tradable mint for CpAmm hase unsupported token extension.")]
+    UnsupportedTokenExtension
 }
