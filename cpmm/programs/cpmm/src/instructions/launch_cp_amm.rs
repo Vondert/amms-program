@@ -3,7 +3,9 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token;
 use anchor_spl::token::{Mint, Token};
 use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::TokenAccount;
+use anchor_spl::token_interface::{
+    TokenAccount
+};
 use crate::state::{AmmsConfig, CpAmm};
 
 #[derive(Accounts)]
@@ -14,12 +16,13 @@ pub struct LaunchCpAmm<'info>{
     pub quote_mint: Box<Account<'info, Mint>>,
     #[account(mut)]
     pub lp_mint: Box<Account<'info, Mint>>,
-
     #[account(mut)]
+    // Token program will check mint and authority via transfer instruction
     pub signer_base_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
+    // Token program will check mint and authority via transfer instruction
     pub signer_quote_account: Box<InterfaceAccount<'info, TokenAccount>>,
-    
+
     #[account(
         mut,
         constraint = signer_lp_account.owner == signer.key()
@@ -58,9 +61,20 @@ pub struct LaunchCpAmm<'info>{
         associated_token::authority = cp_amm,
     )]
     pub cp_amm_quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    
+
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
+}
+
+/*impl<'info> LaunchCpAmm<'info>{
+    fn get_provide_base_liquidity_transfer_context() ->{
+
+    }
+}*/
+
+pub(crate) fn handler(ctx: Context<LaunchCpAmm>, base_launch_liquidity: u64, quote_launch_liquidity: u64) -> Result<()> {
+
+    Ok(())
 }

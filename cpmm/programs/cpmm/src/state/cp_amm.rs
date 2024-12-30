@@ -2,7 +2,7 @@ use anchor_lang::{account, InitSpace};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Mint;
 use anchor_spl::token_interface;
-use crate::utils::Q64_64;
+use crate::utils::math::Q64_64;
 use crate::error::ErrorCode;
 use crate::state::AmmsConfig;
 

@@ -36,5 +36,8 @@ pub enum ErrorCode {
     UnsupportedTradableMint,
 
     #[msg("Tradable mint for CpAmm hase unsupported token extension.")]
-    UnsupportedTokenExtension
+    UnsupportedTokenExtension,
+
+    #[msg("Mint with TransferFee extension failed to calculate fee")]
+    MintTransferFeeCalculationFailed
 }

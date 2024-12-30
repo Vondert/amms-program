@@ -11,6 +11,7 @@ use anchor_spl::token_2022::spl_token_2022::extension::{BaseStateWithExtensions,
 const ALLOWED_TOKEN_EXTENSIONS: &[ExtensionType] = &[
     ExtensionType::TransferFeeConfig,
     ExtensionType::ImmutableOwner,
+    ExtensionType::ConfidentialTransferMint,
     ExtensionType::MemoTransfer,
     ExtensionType::InterestBearingConfig,
     ExtensionType::TransferHook,
