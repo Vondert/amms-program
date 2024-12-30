@@ -10,6 +10,7 @@ pub struct Q64_64 {
 impl Q64_64 {
     pub const FRACTIONAL_BITS: u32 = 64;
     pub const FRACTIONAL_MASK: u128 = (1u128 << Self::FRACTIONAL_BITS) - 1;
+    pub const FRACTIONAL_SCALE: f64 = 18446744073709551616.0;
     pub const MAX: Self = Q64_64 { value: u128::MAX };
     pub fn new(value: u128) -> Self {
         Q64_64 { value }
@@ -24,6 +25,18 @@ impl Q64_64 {
         Self {
             value: (value as u128) << Self::FRACTIONAL_BITS,
         }
+    }
+    pub fn from_f64(value: f64) -> Self {
+        let integer_part = value.floor() as u128;
+        let fractional_part = ((value - integer_part as f64) * Self::FRACTIONAL_SCALE).round() as u128;
+        Self{
+            value: (integer_part << Self::FRACTIONAL_BITS) | fractional_part
+        }
+    }
+    pub fn to_f64(&self) -> f64 {
+        let (high_bits, low_bits) = self.split();
+        let fractional_part = (low_bits as f64) / Self::FRACTIONAL_SCALE;
+        high_bits as f64 + fractional_part
     }
     pub fn split(&self) -> (u64, u64) {
         (self.get_integer_bits(), self.get_fractional_bits())
@@ -41,17 +54,20 @@ impl Q64_64 {
     pub fn get_fractional_bits(&self) -> u64 {
         (self.value & Self::FRACTIONAL_MASK) as u64
     }
-    pub fn abs_diff(&self, other: Self) -> u128 {
-        self.value.abs_diff(other.value)
+    pub fn abs_diff(&self, other: Self) -> Q64_64 {
+        Q64_64::from_u128(self.value.abs_diff(other.value))
     }
     pub fn sqrt_from_u128(value: u128) -> Self {
+        if value == 0{
+            return Q64_64::from_u128(0);
+        }
         let scaled_value = U256::from(value) << Self::FRACTIONAL_BITS;
         let mut low = U256::zero();
         let mut high = scaled_value;
         let mut mid;
 
         while high - low > U256::from(1u128) {
-            mid = (low + high) / 2;
+            mid = (low + high) >> 1;
 
             let square = (mid.saturating_mul(mid)) >> Self::FRACTIONAL_BITS;
             if square <= scaled_value {
@@ -61,23 +77,18 @@ impl Q64_64 {
             }
         }
 
-        let low_square = (low.saturating_mul(low)) >> Self::FRACTIONAL_BITS;
-        let high_square = (high.saturating_mul(high)) >> Self::FRACTIONAL_BITS;
-
-        let result = if scaled_value.abs_diff(low_square) <= scaled_value.abs_diff(high_square) {
-            low
-        } else {
-            high
-        };
-
         Self {
-            value: result.as_u128(),
+            value: low.as_u128(),
         }
     }
 
     pub fn square_as_u128(self) -> u128 {
         let result = (U256::from(self.value) * U256::from(self.value)) >> (Self::FRACTIONAL_BITS * 2);
         result.as_u128()
+    }
+    pub fn square_as_u64(self) -> u64 {
+        let result = (U256::from(self.value) * U256::from(self.value)) >> (Self::FRACTIONAL_BITS * 3);
+        result.as_u64()
     }
 }
 
@@ -125,13 +136,14 @@ impl Div for Q64_64 {
 #[cfg(test)]
 mod tests {
     use super::Q64_64;
+
     
+
     #[test]
-    fn test_add() {
-        let a = Q64_64::sqrt_from_u128(1);
-        let b = Q64_64::sqrt_from_u128(u64::MAX as u128);
-        let result = (a / b).split();
-        println!("{:?}.{:?}", result.0.to_be_bytes(), result.1.to_be_bytes());
-        assert_eq!(result.0, result.1);
+    fn test_conversion_cycle() {
+        let original = 1.000001;
+        let q6464 = Q64_64::from_f64(original);
+        let reconstructed = q6464.to_f64();
+        assert_eq!(original - reconstructed, 0.0, "Conversion cycle mismatch");
     }
 }
