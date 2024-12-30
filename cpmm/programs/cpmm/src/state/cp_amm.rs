@@ -1,11 +1,14 @@
 use anchor_lang::{account, InitSpace};
 use anchor_lang::prelude::*;
+use anchor_spl::token::Mint;
 use crate::utils::Q64_64;
 use crate::error::ErrorCode;
+use crate::state::AmmsConfig;
 
 #[account]
 #[derive(InitSpace)]
 pub struct CpAmm {
+    is_launched: bool, // 1
     // Base liquidity that will be locked forever after pool launch
     // Used for stabilizing pool if empty
     initial_locked_base_liquidity: u64, // 8
@@ -70,12 +73,12 @@ impl CpAmm {
 
         let new_base_liquidity =self.base_liquidity.checked_add(base_amount_after_fees).unwrap() ;
         let new_quote_liquidity = (self.sqrt_constant_product / Q64_64::sqrt_from_u128(new_base_liquidity as u128)).square_as_u64();
-        
+
         let quote_delta = self.quote_liquidity.checked_sub(new_quote_liquidity).unwrap();
 
         require!(quote_delta.abs_diff(estimated_quote_amount) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
         self.check_constant_product_after_swap(new_base_liquidity, new_quote_liquidity)?;
-        
+
         Ok(SwapResult::new(
             base_fee_amount + base_amount_after_fees,
             base_protocol_fee_amount,
@@ -99,7 +102,7 @@ impl CpAmm {
 
         require!(base_delta.abs_diff(estimated_base_amount) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
         self.check_constant_product_after_swap(new_base_liquidity, new_quote_liquidity)?;
-        
+
         Ok(SwapResult::new(
             quote_fee_amount + quote_amount_after_fees,
             quote_protocol_fee_amount,
@@ -147,6 +150,26 @@ impl CpAmm {
     }
     pub fn calculate_providers_fee_amount(&self, swap_amount: u64) -> u64{
         ((swap_amount as u128).checked_mul(self.providers_fee_rate_basis_points as u128).unwrap() / 10000u128) as u64
+    }
+    
+    pub fn initialize(
+        &mut self,
+        base_mint: &Account<Mint>, 
+        quote_mint: &Account<Mint>, 
+        lp_mint: &Account<Mint>,
+        amms_config: &Account<AmmsConfig>,
+        bump: u8,
+    ) -> (){
+        
+        self.providers_fee_rate_basis_points = amms_config.providers_fee_rate_basis_points;
+        self.protocol_fee_rate_basis_points = amms_config.protocol_fee_rate_basis_points;
+        
+        self.base_mint = base_mint.key();
+        self.quote_mint = quote_mint.key();
+        self.lp_mint = lp_mint.key();
+        self.amms_config = amms_config.key();
+        self.is_launched = false;
+        self.bump = bump;
     }
 }
 

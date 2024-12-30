@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("The provided fee_rate for AmmsConfig exceeds the maximum allowed value of 10000 basis points (100%).")]
+    #[msg("The provided fee rate for AmmsConfig exceeds the maximum allowed value of 10000 basis points (100%).")]
     ConfigFeeRateExceeded,
 
     #[msg("Quote liquidity is zero. Cannot perform swap operation.")]
@@ -25,4 +25,8 @@ pub enum ErrorCode {
 
     #[msg("The calculated base-to-quote liquidity ratio after liquidity adjustment exceeds the allowed tolerance.")]
     AdjustLiquidityRatioToleranceExceeded,
+    
+    #[msg("Provided total fee for CpAmm exceeds the maximum allowed value of 10000 basis points (100%).")]
+    CpAmmFeeRateExceeded
+    
 }

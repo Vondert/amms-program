@@ -27,11 +27,16 @@ pub mod cpmm {
     }
 
 
-    pub fn initialize_amms_config(ctx: Context<InitializeAmmsConfig>, fee_rate_basis_points: u16) -> Result<()>{
-        initialize_amms_config::handler(ctx, fee_rate_basis_points)
+    pub fn initialize_amms_config(ctx: Context<InitializeAmmsConfig>, protocol_fee_rate_basis_points: u16, providers_fee_rate_basis_points: u16) -> Result<()>{
+        initialize_amms_config::handler(ctx, protocol_fee_rate_basis_points, providers_fee_rate_basis_points)
     }
 
     pub fn update_amms_config_fee_authority(ctx: Context<UpdateAmmsConfigFeeAuthority>) -> Result<()>{
         update_amms_config_fee_authority::handler(ctx)
+    }
+    
+    
+    pub fn initialize_cp_amm(ctx: Context<InitializeCpAmm>) -> Result<()>{
+        initialize_cp_amm::handler(ctx)
     }
 }

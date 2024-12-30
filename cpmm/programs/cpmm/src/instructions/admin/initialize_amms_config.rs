@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::state::{AmmsConfig, AmmsConfigsManager};
 use crate::constants::ANCHOR_DISCRIMINATOR;
-use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct InitializeAmmsConfig<'info> {
@@ -30,14 +29,14 @@ pub struct InitializeAmmsConfig<'info> {
     system_program: Program<'info, System>,
 }
 
-pub(crate) fn handler(ctx: Context<InitializeAmmsConfig>, fee_rate_basis_points: u16) -> Result<()> {
-    require!(fee_rate_basis_points <= 10000, ErrorCode::ConfigFeeRateExceeded);
+pub(crate) fn handler(ctx: Context<InitializeAmmsConfig>, protocol_fee_rate_basis_points: u16, providers_fee_rate_basis_points: u16) -> Result<()> {
     ctx.accounts.amms_config.initialize(
         ctx.accounts.fee_authority.key(),
-        fee_rate_basis_points,
+        protocol_fee_rate_basis_points,
+        providers_fee_rate_basis_points,
         ctx.accounts.amms_configs_manager.configs_count,
         ctx.bumps.amms_config
-    );
+    )?;
     ctx.accounts.amms_configs_manager.configs_count = ctx.accounts.amms_configs_manager.configs_count.checked_add(1).unwrap();
     Ok(())
 }
