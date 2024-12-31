@@ -5,23 +5,23 @@ use anchor_spl::token::Token;
 use anchor_spl::token_2022::{Token2022, TransferChecked};
 use anchor_spl::token_interface::{Mint, TokenAccount};
 
-pub struct TransferContextRegular<'at, 'bt, 'ct, 'it> {
-    pub cpi_context: CpiContext<'at, 'bt, 'ct, 'it, TransferChecked<'it>>,
+pub struct TransferContextRegular<'at, 'bt, 'ct, 'info> {
+    pub cpi_context: CpiContext<'at, 'bt, 'ct, 'info, TransferChecked<'info>>,
 }
 
 
-impl<'at, 'bt, 'ct, 'it>  TransferContextRegular<'at, 'bt, 'ct, 'it>  {
+impl<'at, 'bt, 'ct, 'info>  TransferContextRegular<'at, 'bt, 'ct, 'info>  {
     pub(super) fn with_signers(self, signers_seeds: &'at[&'bt[&'ct[u8]]]) -> Self{
         Self {
             cpi_context: self.cpi_context.with_signer(signers_seeds),
         }
     }
     pub(super) fn new_for_spl_token(
-        mint: &InterfaceAccount<'it, Mint>,
-        from: &InterfaceAccount<'it, TokenAccount>,
-        from_authority: AccountInfo<'it>,
-        to: &InterfaceAccount<'it, TokenAccount>,
-        token_program: &Program<'it, Token>
+        mint: &InterfaceAccount<'info, Mint>,
+        from: &InterfaceAccount<'info, TokenAccount>,
+        from_authority: AccountInfo<'info>,
+        to: &InterfaceAccount<'info, TokenAccount>,
+        token_program: &Program<'info, Token>
     ) -> Self{
         let cpi_context = CpiContext::new(
             token_program.to_account_info(),
@@ -37,11 +37,11 @@ impl<'at, 'bt, 'ct, 'it>  TransferContextRegular<'at, 'bt, 'ct, 'it>  {
         }
     }
     pub(super) fn new_for_token_2022(
-        mint: &InterfaceAccount<'it, Mint>,
-        from: &InterfaceAccount<'it, TokenAccount>,
-        from_authority: AccountInfo<'it>,
-        to: &InterfaceAccount<'it, TokenAccount>,
-        token_2022_program: &Program<'it, Token2022>
+        mint: &InterfaceAccount<'info, Mint>,
+        from: &InterfaceAccount<'info, TokenAccount>,
+        from_authority: AccountInfo<'info>,
+        to: &InterfaceAccount<'info, TokenAccount>,
+        token_2022_program: &Program<'info, Token2022>
     ) -> Self{
         let cpi_context = CpiContext::new(
             token_2022_program.to_account_info(),

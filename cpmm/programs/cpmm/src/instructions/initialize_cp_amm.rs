@@ -20,7 +20,7 @@ pub struct InitializeCpAmm<'info> {
     #[account(
         init,
         payer = signer,
-        mint::decimals = 6,
+        mint::decimals = CpAmm::LP_MINT_INITIAL_DECIMALS,
         mint::authority = cp_amm,
         mint::token_program = token_program
     )]
@@ -94,6 +94,5 @@ pub(crate) fn handler(ctx: Context<InitializeCpAmm>) -> Result<()> {
         &accounts.lp_mint,
         &accounts.amms_config,
         ctx.bumps.cp_amm
-    );
-    Ok(())
+    )
 }

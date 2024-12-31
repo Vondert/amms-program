@@ -38,6 +38,9 @@ impl Q64_64 {
         let fractional_part = (low_bits as f64) / Self::FRACTIONAL_SCALE;
         high_bits as f64 + fractional_part
     }
+    pub fn to_u64(&self) -> u64 {
+        (self.value >> Self::FRACTIONAL_BITS) as u64
+    }
     pub fn split(&self) -> (u64, u64) {
         (self.get_integer_bits(), self.get_fractional_bits())
     }
@@ -141,9 +144,13 @@ mod tests {
 
     #[test]
     fn test_conversion_cycle() {
-        let original = 1.000001;
-        let q6464 = Q64_64::from_f64(original);
-        let reconstructed = q6464.to_f64();
-        assert_eq!(original - reconstructed, 0.0, "Conversion cycle mismatch");
+        let q6464_1 = Q64_64::from_u64(1);
+        let q6464_2 = Q64_64::from_u64(u64::MAX);
+        let res = q6464_1 / q6464_2;
+        let res2 = 1.0 / 18446744073709551616.0;
+        println!("res = {:?}", res);
+        println!("res formatted {}", res.to_f64());
+        println!("res2 formatted {}", res2);
+        assert_eq!(18446744073709551616.0, 0.0, "Conversion cycle mismatch");
     }
 }

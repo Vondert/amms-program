@@ -6,39 +6,25 @@ use anchor_spl::token_interface::spl_token_2022::extension::transfer_fee::Transf
 use crate::utils::transfer::{TransferContextRegular, TransferContextWithFee};
 use crate::error::ErrorCode;
 
-pub struct TokenTransferInstruction<'at, 'bt, 'ct, 'it> {
+pub struct TokenTransferInstruction<'at, 'bt, 'ct, 'info> {
     amount: u64,
     decimals: u8,
-    context: TransferContextType<'at, 'bt, 'ct, 'it>,
+    context: TransferContextType<'at, 'bt, 'ct, 'info>,
 }
-pub enum TransferContextType<'at, 'bt, 'ct, 'it> {
-    Regular(TransferContextRegular<'at, 'bt, 'ct, 'it> ),
-    WithFee(TransferContextWithFee<'at, 'bt, 'ct, 'it> )
-}
-impl<'at, 'bt, 'ct, 'it> TransferContextType<'at, 'bt, 'ct, 'it>{
-    fn add_signers_seeds(self, signers_seeds: &'at[&'bt[&'ct[u8]]]) -> Self {
-        match self { 
-            TransferContextType::Regular(context) => {
-                TransferContextType::Regular(context.with_signers(signers_seeds))
-            },
-            TransferContextType::WithFee(context) => {
-                TransferContextType::WithFee(context.with_signers(signers_seeds))
-            }
-        }
-    }
-}
-impl<'at, 'bt, 'ct, 'it>  TokenTransferInstruction<'at, 'bt, 'ct, 'it>  {
+impl<'at, 'bt, 'ct, 'info>  TokenTransferInstruction<'at, 'bt, 'ct, 'info>  {
 
     pub fn new(
         amount: u64, 
-        mint: &InterfaceAccount<'it, Mint>, 
-        from: &InterfaceAccount<'it, TokenAccount>, 
-        from_authority: AccountInfo<'it>, 
-        to: &InterfaceAccount<'it, TokenAccount>, 
-        token_program: &Program<'it, Token>, 
-        token_2022_program: &Program<'it, Token2022>,
+        mint: &'_ InterfaceAccount<'info, Mint>, 
+        from: &'_ InterfaceAccount<'info, TokenAccount>, 
+        from_authority: AccountInfo<'info>, 
+        to: &'_ InterfaceAccount<'info, TokenAccount>, 
+        token_program: &'_ Program<'info, Token>, 
+        token_2022_program: &'_ Program<'info, Token2022>,
         optional_signers_seeds: Option<&'at[&'bt[&'ct[u8]]]>
     ) -> Result<Self> {
+        require!(amount >= from.amount, ErrorCode::InsufficientBalanceForTransfer);
+        
         let mut context = if mint.to_account_info().owner.key() == token_program.key(){
             TransferContextType::Regular(
                 TransferContextRegular::new_for_spl_token(
@@ -78,6 +64,42 @@ impl<'at, 'bt, 'ct, 'it>  TokenTransferInstruction<'at, 'bt, 'ct, 'it>  {
             }
         }
     }
-
+    
+    pub fn get_decimals(&self) -> u8{
+        self.decimals
+    }
+    pub fn get_amount_after_fee(&self) -> u64{
+        self.get_raw_amount().checked_sub(self.get_fee()).unwrap()
+    }
+    pub fn get_fee(&self) -> u64{
+        match &self.context{
+            TransferContextType::Regular(_) => {
+                0
+            },
+            TransferContextType::WithFee(context) => {
+                context.fee
+            }
+        }
+    }
+    pub fn get_raw_amount(&self) -> u64{
+        self.amount
+    }
 }
 
+
+pub(crate) enum TransferContextType<'at, 'bt, 'ct, 'info> {
+    Regular(TransferContextRegular<'at, 'bt, 'ct, 'info> ),
+    WithFee(TransferContextWithFee<'at, 'bt, 'ct, 'info> )
+}
+impl<'at, 'bt, 'ct, 'info> TransferContextType<'at, 'bt, 'ct, 'info>{
+    fn add_signers_seeds(self, signers_seeds: &'at[&'bt[&'ct[u8]]]) -> Self {
+        match self {
+            TransferContextType::Regular(context) => {
+                TransferContextType::Regular(context.with_signers(signers_seeds))
+            },
+            TransferContextType::WithFee(context) => {
+                TransferContextType::WithFee(context.with_signers(signers_seeds))
+            }
+        }
+    }
+}

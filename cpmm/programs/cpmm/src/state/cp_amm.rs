@@ -9,13 +9,12 @@ use crate::state::AmmsConfig;
 #[account]
 #[derive(InitSpace)]
 pub struct CpAmm {
-    pub is_launched: bool, // 1
-    // Base liquidity that will be locked forever after pool launch
+    is_initialized: bool, // 1
+    is_launched: bool, // 1
+    
+    // Liquidity that will be locked forever after pool launch
     // Used for stabilizing pool if empty
-    initial_locked_base_liquidity: u64, // 8
-    // Quote liquidity that will be locked forever after pool launch
-    // Used for stabilizing pool if empty
-    initial_locked_quote_liquidity: u64, // 8
+    initial_locked_liquidity: u64, // 8
     
     // Square root of the constant product of the pool
     // Stored as square root in Q64.64 for computation accuracy 
@@ -42,28 +41,52 @@ pub struct CpAmm {
     protocol_quote_fees_to_redeem: u64, // 8
     
     // Mint of the base token
-    pub base_mint: Pubkey,  // 32
+    base_mint: Pubkey,  // 32
     // Mint of the quote token
-    pub quote_mint: Pubkey, // 32
+    quote_mint: Pubkey, // 32
     // Mint of the liquidity token
-    pub lp_mint: Pubkey,    // 32
+    lp_mint: Pubkey,    // 32
     
     // Liquidity vault with base tokens
-    pub base_vault: Pubkey, // 32
+    base_vault: Pubkey, // 32
     // Liquidity vault with quote tokens
-    pub quote_vault: Pubkey, // 32
+    quote_vault: Pubkey, // 32
     
     // AmmsConfig account
-    pub amms_config: Pubkey, // 32
+    amms_config: Pubkey, // 32
     // Canonical bump
-    pub bump: u8, // 1
+    bump: u8, // 1
 }
 
 impl CpAmm {
     pub const SEED: &'static[u8] = b"cp_amm";
+    pub const LP_MINT_INITIAL_DECIMALS: u8 = 5;
     const SWAP_CONSTANT_PRODUCT_TOLERANCE: f64 = 0.000001;
     const ADJUST_LIQUIDITY_RATIO_TOLERANCE: f64 = 0.000001;
-    pub fn swap_base_to_quote_amount(&self, base_amount: u64, estimated_quote_amount: u64, allowed_slippage: u64) -> Result<SwapResult>{
+    pub fn get_launch_payload(&self, base_liquidity: u64, quote_liquidity: u64) -> Result<LaunchPayload> {
+        require!(!self.is_launched, ErrorCode::CpAmmAlreadyLaunched);
+        require!(self.is_initialized, ErrorCode::CpAmmNotInitialized);
+        require!(base_liquidity > 0, ErrorCode::ProvidedBaseLiquidityIsZero);
+        require!(quote_liquidity > 0, ErrorCode::ProvidedQuoteLiquidityIsZero);
+        
+        let sqrt_constant_product = Q64_64::sqrt_from_u128(base_liquidity as u128 * quote_liquidity as u128);
+        let base_quote_ratio =  Q64_64::from_u64(base_liquidity) / Q64_64::from_u64(quote_liquidity);
+        let lp_tokens_supply = sqrt_constant_product.to_u64();
+        let initial_locked_liquidity = 10_u64.pow(Self::LP_MINT_INITIAL_DECIMALS as u32);
+        
+        let difference = lp_tokens_supply.checked_sub(initial_locked_liquidity).ok_or(ErrorCode::LaunchLiquidityTooSmall)?;
+        require!(difference >= initial_locked_liquidity << 2, ErrorCode::LaunchLiquidityTooSmall);
+        
+        Ok(LaunchPayload {
+            initial_locked_liquidity,
+            base_liquidity,
+            quote_liquidity,
+            sqrt_constant_product,
+            base_quote_ratio,
+            lp_tokens_supply,
+        })
+    }
+    pub fn calculate_base_to_quote_swap_payload(&self, base_amount: u64, estimated_quote_amount: u64, allowed_slippage: u64) -> Result<SwapPayload>{
         require!(self.quote_liquidity > 0, ErrorCode::QuoteLiquidityIsZero);
         require!(self.base_liquidity > 0, ErrorCode::BaseLiquidityIsZero);
         require!(base_amount > 0, ErrorCode::SwapAmountIsZero);
@@ -80,14 +103,14 @@ impl CpAmm {
         require!(quote_delta.abs_diff(estimated_quote_amount) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
         self.check_constant_product_after_swap(new_base_liquidity, new_quote_liquidity)?;
 
-        Ok(SwapResult::new(
+        Ok(SwapPayload::new(
             base_fee_amount + base_amount_after_fees,
             base_protocol_fee_amount,
             quote_delta,
             true
         ))
     }
-    pub fn swap_quote_to_base_amount(&self, quote_amount: u64, estimated_base_amount: u64, allowed_slippage: u64) -> Result<SwapResult>{
+    pub fn calculate_quote_to_base_swap_payload(&self, quote_amount: u64, estimated_base_amount: u64, allowed_slippage: u64) -> Result<SwapPayload>{
         require!(self.quote_liquidity > 0, ErrorCode::QuoteLiquidityIsZero);
         require!(self.base_liquidity > 0, ErrorCode::BaseLiquidityIsZero);
         require!(quote_amount > 0, ErrorCode::SwapAmountIsZero);
@@ -104,28 +127,39 @@ impl CpAmm {
         require!(base_delta.abs_diff(estimated_base_amount) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
         self.check_constant_product_after_swap(new_base_liquidity, new_quote_liquidity)?;
 
-        Ok(SwapResult::new(
+        Ok(SwapPayload::new(
             quote_fee_amount + quote_amount_after_fees,
             quote_protocol_fee_amount,
             base_delta,
             false
         ))
     }
-    pub fn update_after_swap(&mut self, swap_result: SwapResult) -> Result<()> {
-        if swap_result.is_in_out(){
-            self.base_liquidity = self.base_liquidity.checked_add(swap_result.in_amount_to_add()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
-            self.quote_liquidity = self.quote_liquidity.checked_sub(swap_result.out_amount_to_withdraw()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
-            self.protocol_base_fees_to_redeem = self.protocol_base_fees_to_redeem.checked_add(swap_result.in_protocol_fee).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
+    pub fn launch(&mut self, launch_payload: LaunchPayload, base_vault: &InterfaceAccount<token_interface::TokenAccount>, quote_vault: &InterfaceAccount<token_interface::TokenAccount>) -> (){
+        self.base_liquidity = launch_payload.base_liquidity;
+        self.quote_liquidity = launch_payload.quote_liquidity;
+        self.initial_locked_liquidity = launch_payload.initial_locked_liquidity;
+        self.lp_tokens_supply = launch_payload.lp_tokens_supply;
+        self.sqrt_constant_product = launch_payload.sqrt_constant_product;
+        self.base_quote_ratio = launch_payload.base_quote_ratio;
+        self.base_vault = base_vault.key();
+        self.quote_vault = quote_vault.key();
+    }
+    pub fn swap(&mut self, swap_payload: SwapPayload) -> Result<()> {
+        if swap_payload.is_in_out(){
+            self.base_liquidity = self.base_liquidity.checked_add(swap_payload.in_amount_to_add()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
+            self.quote_liquidity = self.quote_liquidity.checked_sub(swap_payload.out_amount_to_withdraw()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
+            self.protocol_base_fees_to_redeem = self.protocol_base_fees_to_redeem.checked_add(swap_payload.in_protocol_fee).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
         }
         else{
-            self.quote_liquidity = self.quote_liquidity.checked_add(swap_result.in_amount_to_add()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
-            self.base_liquidity = self.base_liquidity.checked_sub(swap_result.out_amount_to_withdraw()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
-            self.protocol_quote_fees_to_redeem = self.protocol_quote_fees_to_redeem.checked_add(swap_result.in_protocol_fee).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
+            self.quote_liquidity = self.quote_liquidity.checked_add(swap_payload.in_amount_to_add()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
+            self.base_liquidity = self.base_liquidity.checked_sub(swap_payload.out_amount_to_withdraw()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
+            self.protocol_quote_fees_to_redeem = self.protocol_quote_fees_to_redeem.checked_add(swap_payload.in_protocol_fee).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
         }
         self.sqrt_constant_product = self.calculate_sqrt_constant_product();
         self.base_quote_ratio = self.calculate_base_quote_ratio();
         Ok(())
     }
+
     fn check_constant_product_after_swap(&self, new_base_liquidity: u64, new_quote_liquidity: u64) -> Result<()>{
         let new_sqrt_constant_product = Q64_64::sqrt_from_u128(new_base_liquidity as u128 * new_quote_liquidity as u128);
         let difference = self.sqrt_constant_product.abs_diff(new_sqrt_constant_product);
@@ -153,6 +187,8 @@ impl CpAmm {
         ((swap_amount as u128).checked_mul(self.providers_fee_rate_basis_points as u128).unwrap() / 10000u128) as u64
     }
     
+    
+    
     pub fn initialize(
         &mut self,
         base_mint: &InterfaceAccount<token_interface::Mint>,
@@ -160,7 +196,8 @@ impl CpAmm {
         lp_mint: &Account<Mint>,
         amms_config: &Account<AmmsConfig>,
         bump: u8,
-    ) -> (){
+    ) -> Result<()>{
+        require!(self.is_initialized, ErrorCode::CpAmmAlreadyInitialized);
         
         self.providers_fee_rate_basis_points = amms_config.providers_fee_rate_basis_points;
         self.protocol_fee_rate_basis_points = amms_config.protocol_fee_rate_basis_points;
@@ -170,17 +207,80 @@ impl CpAmm {
         self.lp_mint = lp_mint.key();
         self.amms_config = amms_config.key();
         self.is_launched = false;
+        self.is_initialized = true;
         self.bump = bump;
+        
+        Ok(())
+    }
+
+    pub fn is_initialized(&self) -> bool{
+        self.is_initialized
+    }
+    pub fn is_launched(&self) -> bool {
+        self.is_launched
+    }
+    pub fn bump(&self) -> u8 {
+        self.bump
+    }
+    pub fn base_mint(&self) -> &Pubkey{
+        &self.base_mint
+    }
+
+    pub fn quote_mint(&self) -> &Pubkey{
+        &self.quote_mint
+    }
+    pub fn lp_mint(&self) -> &Pubkey{
+        &self.lp_mint
+    }
+    pub fn base_vault(&self) -> &Pubkey{
+        &self.base_vault
+    }
+    pub fn quote_vault(&self) -> &Pubkey{
+        &self.quote_vault
+    }
+    pub fn amms_config(&self) -> &Pubkey{
+        &self.amms_config
+    }
+    
+}
+
+pub struct LaunchPayload {
+    initial_locked_liquidity: u64,
+    sqrt_constant_product: Q64_64,
+    base_quote_ratio: Q64_64,
+    base_liquidity: u64,
+    quote_liquidity: u64,
+    lp_tokens_supply: u64,
+}
+impl LaunchPayload {
+    pub fn initial_locked_liquidity(&self) -> u64{
+        self.initial_locked_liquidity
+    }
+    pub fn sqrt_constant_product(&self) -> Q64_64{
+        self.sqrt_constant_product
+    }
+    pub fn base_quote_ratio(&self) -> Q64_64{
+        self.base_quote_ratio
+    }
+    pub fn base_liquidity(&self) -> u64{
+        self.base_liquidity
+    }
+    pub fn quote_liquidity(&self) -> u64{
+        self.quote_liquidity
+    }
+    pub fn lp_tokens_supply(&self) -> u64{
+        self.lp_tokens_supply
     }
 }
 
-pub struct SwapResult{
+pub struct SwapPayload {
     in_amount_to_add: u64,
     in_protocol_fee: u64,
     out_amount_to_withdraw: u64,
     is_in_out: bool,
 }
-impl SwapResult{
+
+impl SwapPayload {
     fn new(in_amount_to_add: u64, in_protocol_fee: u64, out_amount_to_withdraw: u64, is_in_out: bool) -> Self {
         Self{
             in_amount_to_add,

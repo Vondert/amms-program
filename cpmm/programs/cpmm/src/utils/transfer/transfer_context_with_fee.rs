@@ -5,11 +5,11 @@ use anchor_spl::token_2022::{Token2022};
 use anchor_spl::token_interface::{Mint, TokenAccount};
 use anchor_spl::token_2022_extensions::TransferCheckedWithFee;
 
-pub struct TransferContextWithFee<'at, 'bt, 'ct, 'it>  {
+pub struct TransferContextWithFee<'at, 'bt, 'ct, 'info>  {
     pub fee: u64,
-    pub cpi_context: CpiContext<'at, 'bt, 'ct, 'it, TransferCheckedWithFee<'it>>,
+    pub cpi_context: CpiContext<'at, 'bt, 'ct, 'info, TransferCheckedWithFee<'info>>,
 }
-impl<'at, 'bt, 'ct, 'it>  TransferContextWithFee<'at, 'bt, 'ct, 'it>  {
+impl<'at, 'bt, 'ct, 'info>  TransferContextWithFee<'at, 'bt, 'ct, 'info>  {
     pub(super) fn with_signers(self, signers_seeds: &'at[&'bt[&'ct[u8]]]) -> Self{
         Self {
             fee: self.fee,
@@ -18,11 +18,11 @@ impl<'at, 'bt, 'ct, 'it>  TransferContextWithFee<'at, 'bt, 'ct, 'it>  {
     }
     pub(super) fn new_for_token_2022(
         fee: u64,
-        mint: &InterfaceAccount<'it, Mint>,
-        from: &InterfaceAccount<'it, TokenAccount>,
-        from_authority: AccountInfo<'it>,
-        to: &InterfaceAccount<'it, TokenAccount>,
-        token_2022_program: &Program<'it, Token2022>
+        mint: &InterfaceAccount<'info, Mint>,
+        from: &InterfaceAccount<'info, TokenAccount>,
+        from_authority: AccountInfo<'info>,
+        to: &InterfaceAccount<'info, TokenAccount>,
+        token_2022_program: &Program<'info, Token2022>
     ) -> Self{
         let cpi_context = CpiContext::new(
             token_2022_program.to_account_info(),
