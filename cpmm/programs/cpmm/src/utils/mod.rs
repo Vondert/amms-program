@@ -1,5 +1,5 @@
 mod helpers;
 pub mod math;
-pub mod transfer;
+pub mod token_instructions;
 
 pub use helpers::*;

@@ -12,20 +12,20 @@ pub struct AmmsConfigsManager {
 
 impl AmmsConfigsManager {
     pub const SEED: &'static [u8] = b"amms_configs_manager";
-    pub fn initialize(&mut self, authority: Pubkey, head_authority: Pubkey, bump: u8) -> () {
+    pub(crate) fn initialize(&mut self, authority: Pubkey, head_authority: Pubkey, bump: u8) -> () {
         self.bump = bump;
         self.configs_count = 0;
         self.update_authority(authority);
         self.update_head_authority(head_authority);
     }
 
-    pub fn update_authority(&mut self, authority: Pubkey) {
+    pub(crate) fn update_authority(&mut self, authority: Pubkey) {
         self.authority = authority;
     }
-    pub fn update_head_authority(&mut self, head_authority: Pubkey) {
+    pub(crate) fn update_head_authority(&mut self, head_authority: Pubkey) {
         self.head_authority = head_authority;
     }
-    pub fn increment_configs_count(&mut self) -> () {
+    pub(crate) fn increment_configs_count(&mut self) -> () {
         self.configs_count = self.configs_count.checked_add(1).unwrap()
     }
 }

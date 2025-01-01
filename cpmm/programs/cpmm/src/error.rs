@@ -50,9 +50,12 @@ pub enum ErrorCode {
     #[msg("Mint with TransferFee extension failed to calculate fee")]
     MintTransferFeeCalculationFailed,
     
-    #[msg("Insufficient balance in the token account to complete the transfer.")]
+    #[msg("Insufficient balance in the token account to complete the token_instructions.")]
     InsufficientBalanceForTransfer,
 
+    #[msg("Minting the requested amount of liquidity tokens cause supply overflow.")]
+    LiquidityMintOverflow,
+    
     #[msg("CpAmm is not initialized.")]
     CpAmmNotInitialized,
 

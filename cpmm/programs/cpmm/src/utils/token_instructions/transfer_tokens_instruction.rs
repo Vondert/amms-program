@@ -3,15 +3,15 @@ use anchor_spl::token::Token;
 use anchor_spl::token_2022::{Token2022};
 use anchor_spl::token_interface::{get_mint_extension_data, transfer_checked, transfer_checked_with_fee, Mint, TokenAccount};
 use anchor_spl::token_interface::spl_token_2022::extension::transfer_fee::TransferFeeConfig;
-use crate::utils::transfer::{TransferContextRegular, TransferContextWithFee};
+use crate::utils::token_instructions::{TransferContextRegular, TransferContextWithFee};
 use crate::error::ErrorCode;
 
-pub struct TokenTransferInstruction<'at, 'bt, 'ct, 'info> {
+pub struct TransferTokensInstruction<'at, 'bt, 'ct, 'info> {
     amount: u64,
     decimals: u8,
     context: TransferContextType<'at, 'bt, 'ct, 'info>,
 }
-impl<'at, 'bt, 'ct, 'info>  TokenTransferInstruction<'at, 'bt, 'ct, 'info>  {
+impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
 
     pub fn new(
         amount: u64, 
@@ -20,12 +20,11 @@ impl<'at, 'bt, 'ct, 'info>  TokenTransferInstruction<'at, 'bt, 'ct, 'info>  {
         from_authority: AccountInfo<'info>, 
         to: &'_ InterfaceAccount<'info, TokenAccount>, 
         token_program: &'_ Program<'info, Token>, 
-        token_2022_program: &'_ Program<'info, Token2022>,
-        optional_signers_seeds: Option<&'at[&'bt[&'ct[u8]]]>
+        token_2022_program: &'_ Program<'info, Token2022>
     ) -> Result<Self> {
         require!(amount >= from.amount, ErrorCode::InsufficientBalanceForTransfer);
         
-        let mut context = if mint.to_account_info().owner.key() == token_program.key(){
+        let context = if mint.to_account_info().owner.key() == token_program.key(){
             TransferContextType::Regular(
                 TransferContextRegular::new_for_spl_token(
                     mint, from, from_authority, to, token_program
@@ -45,16 +44,17 @@ impl<'at, 'bt, 'ct, 'info>  TokenTransferInstruction<'at, 'bt, 'ct, 'info>  {
                 )
             )
         };
-        if let Some(signer_seeds) = optional_signers_seeds {
-            context = context.add_signers_seeds(signer_seeds);
-        }
+
         Ok(Self {
             amount,
             decimals: mint.decimals,
             context,
         })
     }
-    pub fn execute_transfer(self) -> Result<()>{
+    pub fn execute(mut self, optional_signers_seeds: Option<&'at[&'bt[&'ct[u8]]]>) -> Result<()>{
+        if let Some(signer_seeds) = optional_signers_seeds {
+            self.context = self.context.add_signers_seeds(signer_seeds);
+        }
         match self.context {
             TransferContextType::Regular(context) => {
                 transfer_checked(context.cpi_context, self.amount, self.decimals)

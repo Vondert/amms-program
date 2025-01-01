@@ -17,7 +17,7 @@ pub struct AmmsConfig {
 
 impl AmmsConfig {
     pub const SEED: &'static [u8] = b"amms_config";
-    pub fn initialize(&mut self, fee_authority: Pubkey, protocol_fee_rate_basis_points: u16, providers_fee_rate_basis_points: u16, id: u64, bump: u8) -> Result<()> {
+    pub(crate) fn initialize(&mut self, fee_authority: Pubkey, protocol_fee_rate_basis_points: u16, providers_fee_rate_basis_points: u16, id: u64, bump: u8) -> Result<()> {
         require!(providers_fee_rate_basis_points + protocol_fee_rate_basis_points <= 10000, ErrorCode::ConfigFeeRateExceeded);
         
         self.bump = bump;
@@ -28,7 +28,7 @@ impl AmmsConfig {
         
         Ok(())
     }
-    pub fn update_fee_authority(&mut self, fee_authority: Pubkey) -> () {
+    pub(crate) fn update_fee_authority(&mut self, fee_authority: Pubkey) -> () {
         self.fee_authority = fee_authority;
     }
 }

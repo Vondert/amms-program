@@ -5,10 +5,9 @@ use anchor_spl::token::Token;
 use anchor_spl::token_2022::{Token2022, TransferChecked};
 use anchor_spl::token_interface::{Mint, TokenAccount};
 
-pub struct TransferContextRegular<'at, 'bt, 'ct, 'info> {
+pub(super) struct TransferContextRegular<'at, 'bt, 'ct, 'info> {
     pub cpi_context: CpiContext<'at, 'bt, 'ct, 'info, TransferChecked<'info>>,
 }
-
 
 impl<'at, 'bt, 'ct, 'info>  TransferContextRegular<'at, 'bt, 'ct, 'info>  {
     pub(super) fn with_signers(self, signers_seeds: &'at[&'bt[&'ct[u8]]]) -> Self{

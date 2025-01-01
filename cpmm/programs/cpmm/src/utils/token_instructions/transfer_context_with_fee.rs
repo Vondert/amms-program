@@ -5,7 +5,7 @@ use anchor_spl::token_2022::{Token2022};
 use anchor_spl::token_interface::{Mint, TokenAccount};
 use anchor_spl::token_2022_extensions::TransferCheckedWithFee;
 
-pub struct TransferContextWithFee<'at, 'bt, 'ct, 'info>  {
+pub(super) struct TransferContextWithFee<'at, 'bt, 'ct, 'info>  {
     pub fee: u64,
     pub cpi_context: CpiContext<'at, 'bt, 'ct, 'info, TransferCheckedWithFee<'info>>,
 }

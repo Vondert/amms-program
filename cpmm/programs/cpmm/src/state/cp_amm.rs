@@ -1,6 +1,6 @@
 use anchor_lang::{account, InitSpace};
 use anchor_lang::prelude::*;
-use anchor_spl::token::Mint;
+use anchor_spl::token::{Mint, TokenAccount};
 use anchor_spl::token_interface;
 use crate::utils::math::Q64_64;
 use crate::error::ErrorCode;
@@ -46,16 +46,18 @@ pub struct CpAmm {
     quote_mint: Pubkey, // 32
     // Mint of the liquidity token
     lp_mint: Pubkey,    // 32
-    
+
     // Liquidity vault with base tokens
     base_vault: Pubkey, // 32
     // Liquidity vault with quote tokens
     quote_vault: Pubkey, // 32
+    // Vault with locked liquidity tokens
+    locked_lp_vault: Pubkey, // 32
     
     // AmmsConfig account
     amms_config: Pubkey, // 32
     // Canonical bump
-    bump: u8, // 1
+    bump: [u8; 1], // 1
 }
 
 impl CpAmm {
@@ -134,7 +136,7 @@ impl CpAmm {
             false
         ))
     }
-    pub fn launch(&mut self, launch_payload: LaunchPayload, base_vault: &InterfaceAccount<token_interface::TokenAccount>, quote_vault: &InterfaceAccount<token_interface::TokenAccount>) -> (){
+    pub(crate) fn launch(&mut self, launch_payload: LaunchPayload, base_vault: &InterfaceAccount<token_interface::TokenAccount>, quote_vault: &InterfaceAccount<token_interface::TokenAccount>, locked_lp_vault: &Account<TokenAccount>) -> (){
         self.base_liquidity = launch_payload.base_liquidity;
         self.quote_liquidity = launch_payload.quote_liquidity;
         self.initial_locked_liquidity = launch_payload.initial_locked_liquidity;
@@ -143,8 +145,9 @@ impl CpAmm {
         self.base_quote_ratio = launch_payload.base_quote_ratio;
         self.base_vault = base_vault.key();
         self.quote_vault = quote_vault.key();
+        self.locked_lp_vault = locked_lp_vault.key();
     }
-    pub fn swap(&mut self, swap_payload: SwapPayload) -> Result<()> {
+    pub(crate) fn swap(&mut self, swap_payload: SwapPayload) -> Result<()> {
         if swap_payload.is_in_out(){
             self.base_liquidity = self.base_liquidity.checked_add(swap_payload.in_amount_to_add()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
             self.quote_liquidity = self.quote_liquidity.checked_sub(swap_payload.out_amount_to_withdraw()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
@@ -187,6 +190,9 @@ impl CpAmm {
         ((swap_amount as u128).checked_mul(self.providers_fee_rate_basis_points as u128).unwrap() / 10000u128) as u64
     }
     
+    pub fn seeds(&self) -> [&[u8]; 3] {
+        [Self::SEED, self.lp_mint.as_ref(), self.bump.as_ref()]
+    }
     
     
     pub fn initialize(
@@ -208,7 +214,7 @@ impl CpAmm {
         self.amms_config = amms_config.key();
         self.is_launched = false;
         self.is_initialized = true;
-        self.bump = bump;
+        self.bump = [bump];
         
         Ok(())
     }
@@ -220,7 +226,7 @@ impl CpAmm {
         self.is_launched
     }
     pub fn bump(&self) -> u8 {
-        self.bump
+        self.bump[0]
     }
     pub fn base_mint(&self) -> &Pubkey{
         &self.base_mint
@@ -270,6 +276,9 @@ impl LaunchPayload {
     }
     pub fn lp_tokens_supply(&self) -> u64{
         self.lp_tokens_supply
+    }
+    pub fn launch_liquidity(&self) -> u64{
+        self.lp_tokens_supply.checked_sub(self.initial_locked_liquidity).unwrap()
     }
 }
 

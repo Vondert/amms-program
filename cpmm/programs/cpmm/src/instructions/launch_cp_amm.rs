@@ -8,7 +8,7 @@ use anchor_spl::token_interface::{
     Mint
 };
 use crate::state::{AmmsConfig, CpAmm};
-use crate::utils::transfer::TokenTransferInstruction;
+use crate::utils::token_instructions::{MintTokensInstructions, TransferTokensInstruction};
 
 #[derive(Accounts)]
 pub struct LaunchCpAmm<'info>{
@@ -19,10 +19,10 @@ pub struct LaunchCpAmm<'info>{
     #[account(mut)]
     pub lp_mint: Box<Account<'info, token::Mint>>,
     #[account(mut)]
-    // Token program will check mint and authority via transfer instruction
+    // Token program will check mint and authority via token_instructions instruction
     pub signer_base_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
-    // Token program will check mint and authority via transfer instruction
+    // Token program will check mint and authority via token_instructions instruction
     pub signer_quote_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
@@ -63,6 +63,14 @@ pub struct LaunchCpAmm<'info>{
         associated_token::authority = cp_amm,
     )]
     pub cp_amm_quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        init,
+        payer = signer,
+        associated_token::mint = lp_mint,
+        associated_token::authority = cp_amm,
+    )]
+    pub cp_amm_locked_lp_vault: Box<Account<'info, token::TokenAccount>>,
     
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Program<'info, Token>,
@@ -71,48 +79,71 @@ pub struct LaunchCpAmm<'info>{
 }
 
 impl<'info> LaunchCpAmm<'info>{
-    fn get_provide_base_liquidity_transfer_context(&self, base_liquidity: u64) -> Result<TokenTransferInstruction<'_, '_, '_, 'info>>{
-        TokenTransferInstruction::new(
+    fn get_provide_base_liquidity_transfer_instruction(&self, base_liquidity: u64) -> Result<TransferTokensInstruction<'_, '_, '_, 'info>>{
+        TransferTokensInstruction::new(
             base_liquidity,
             &self.base_mint,
             &self.signer_base_account,
             self.signer.to_account_info(),
             &self.cp_amm_base_vault,
             &self.token_program,
-            &self.token_2022_program,
-            None
+            &self.token_2022_program
         )
     }
-    fn get_provide_quote_liquidity_transfer_context(&self, quote_liquidity: u64) -> Result<TokenTransferInstruction<'_, '_, '_, 'info>>{
-        TokenTransferInstruction::new(
+    fn get_provide_quote_liquidity_transfer_instruction(&self, quote_liquidity: u64) -> Result<TransferTokensInstruction<'_, '_, '_, 'info>>{
+        TransferTokensInstruction::new(
             quote_liquidity,
             &self.quote_mint,
             &self.signer_quote_account,
             self.signer.to_account_info(),
             &self.cp_amm_quote_vault,
             &self.token_program,
-            &self.token_2022_program,
-            None
+            &self.token_2022_program
+        )
+    }
+    fn get_launch_liquidity_mint_instruction(&self, launch_liquidity: u64) -> Result<MintTokensInstructions<'_, '_, '_, 'info>>{
+        MintTokensInstructions::new(
+            launch_liquidity,
+            &self.lp_mint,
+            self.cp_amm.to_account_info(),
+            &self.signer_lp_account,
+            &self.token_program
+        )
+    }
+    fn get_initial_locked_liquidity_mint_instruction(&self, initial_locked_liquidity: u64) -> Result<MintTokensInstructions<'_, '_, '_, 'info>>{
+        MintTokensInstructions::new(
+            initial_locked_liquidity,
+            &self.lp_mint,
+            self.cp_amm.to_account_info(),
+            &self.cp_amm_locked_lp_vault,
+            &self.token_program
         )
     }
 }
 
 pub(crate) fn handler(ctx: Context<LaunchCpAmm>, base_liquidity: u64, quote_liquidity: u64) -> Result<()> {
     
-    let provide_base_instruction = Box::new(ctx.accounts.get_provide_base_liquidity_transfer_context(base_liquidity)?);
-    let provide_quote_instruction = Box::new(ctx.accounts.get_provide_quote_liquidity_transfer_context(quote_liquidity)?);
+    let provide_base_liquidity_instruction = Box::new(ctx.accounts.get_provide_base_liquidity_transfer_instruction(base_liquidity)?);
+    let provide_quote_liquidity_instruction = Box::new(ctx.accounts.get_provide_quote_liquidity_transfer_instruction(quote_liquidity)?);
     
-    let base_liquidity_to_provide = provide_base_instruction.get_amount_after_fee();
-    let quote_liquidity_to_provide = provide_quote_instruction.get_amount_after_fee();
+    let base_liquidity_to_provide = provide_base_liquidity_instruction.get_amount_after_fee();
+    let quote_liquidity_to_provide = provide_quote_liquidity_instruction.get_amount_after_fee();
     
     let launch_payload = ctx.accounts.cp_amm.get_launch_payload(base_liquidity_to_provide, quote_liquidity_to_provide)?;
     
-    provide_base_instruction.execute_transfer()?;
-    provide_quote_instruction.execute_transfer()?;
+    let launch_liquidity_mint_instruction = Box::new(ctx.accounts.get_launch_liquidity_mint_instruction(launch_payload.launch_liquidity())?);
+    let initial_locked_liquidity_mint_instruction = Box::new(ctx.accounts.get_initial_locked_liquidity_mint_instruction(launch_payload.initial_locked_liquidity())?);
     
-    // Mint lp tokens
+    provide_base_liquidity_instruction.execute(None)?;
+    provide_quote_liquidity_instruction.execute(None)?;
+    
+    let cp_amm_seeds = ctx.accounts.cp_amm.seeds();
+    let mint_instruction_seeds: &[&[&[u8]]] = &[&cp_amm_seeds];
+    
+    launch_liquidity_mint_instruction.execute(Some(mint_instruction_seeds))?;
+    initial_locked_liquidity_mint_instruction.execute(Some(mint_instruction_seeds))?;
 
-    ctx.accounts.cp_amm.launch(launch_payload, &ctx.accounts.cp_amm_base_vault, &ctx.accounts.cp_amm_quote_vault);
+    ctx.accounts.cp_amm.launch(launch_payload, &ctx.accounts.cp_amm_base_vault, &ctx.accounts.cp_amm_quote_vault, &ctx.accounts.cp_amm_locked_lp_vault);
     
     Ok(())
 }
