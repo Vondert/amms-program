@@ -73,7 +73,10 @@ impl CpAmm {
         
         let sqrt_constant_product = Q64_64::sqrt_from_u128(base_liquidity as u128 * quote_liquidity as u128);
         let base_quote_ratio =  Q64_64::from_u64(base_liquidity) / Q64_64::from_u64(quote_liquidity);
+        
         let lp_tokens_supply = sqrt_constant_product.to_u64();
+        require!(lp_tokens_supply > 0, ErrorCode::LiquidityTokensToMintIsZero);
+        
         let initial_locked_liquidity = 10_u64.pow(Self::LP_MINT_INITIAL_DECIMALS as u32);
         
         let difference = lp_tokens_supply.checked_sub(initial_locked_liquidity).ok_or(ErrorCode::LaunchLiquidityTooSmall)?;
@@ -88,50 +91,88 @@ impl CpAmm {
             lp_tokens_supply,
         })
     }
-    pub fn calculate_base_to_quote_swap_payload(&self, base_amount: u64, estimated_quote_amount: u64, allowed_slippage: u64) -> Result<SwapPayload>{
+    pub fn get_provide_payload(&self, base_liquidity: u64, quote_liquidity: u64) -> Result<ProvidePayload> {
+        require!(self.is_launched, ErrorCode::CpAmmAlreadyLaunched);
+        require!(base_liquidity > 0, ErrorCode::ProvidedBaseLiquidityIsZero);
+        require!(quote_liquidity > 0, ErrorCode::ProvidedQuoteLiquidityIsZero);
+        require!(self.quote_liquidity > 0, ErrorCode::QuoteLiquidityIsZero);
+        require!(self.base_liquidity > 0, ErrorCode::BaseLiquidityIsZero);
+        
+        let new_base_liquidity = self.base_liquidity.checked_add(base_liquidity).unwrap();
+        let new_quote_liquidity = self.quote_liquidity.checked_add(quote_liquidity).unwrap();
+        let new_base_quote_ratio =  self.calculate_and_validate_liquidity_ratio(new_base_liquidity, new_quote_liquidity)?;
+        
+        let sqrt_constant_product = Q64_64::sqrt_from_u128(new_base_liquidity as u128 * new_quote_liquidity as u128);
+        // In valid amm new constant product is always bigger than current
+        let provided_liquidity = sqrt_constant_product - self.sqrt_constant_product;
+        // In valid amm constant product is never 0
+        let share_from_current_liquidity = provided_liquidity / self.sqrt_constant_product;
+        
+        let lp_tokens_to_mint = (share_from_current_liquidity * Q64_64::from_u64(self.lp_tokens_supply)).to_u64();
+        require!(lp_tokens_to_mint > 0, ErrorCode::LiquidityTokensToMintIsZero);
+        
+        let new_lp_tokens_supply = self.lp_tokens_supply.checked_add(lp_tokens_to_mint).unwrap();
+        Ok(ProvidePayload {
+            sqrt_constant_product,
+            base_quote_ratio: new_base_quote_ratio,
+            base_liquidity: new_base_liquidity,
+            quote_liquidity: new_quote_liquidity,
+            lp_tokens_supply: new_lp_tokens_supply,
+            lp_tokens_to_mint,
+        })
+    }
+    pub fn get_base_to_quote_swap_payload(&self, base_amount: u64, estimated_result: u64, allowed_slippage: u64) -> Result<SwapPayload>{
         require!(self.quote_liquidity > 0, ErrorCode::QuoteLiquidityIsZero);
         require!(self.base_liquidity > 0, ErrorCode::BaseLiquidityIsZero);
         require!(base_amount > 0, ErrorCode::SwapAmountIsZero);
-
+        require!(estimated_result > 0, ErrorCode::EstimatedResultIsZero);
+        
         let base_fee_amount = self.calculate_providers_fee_amount(base_amount);
         let base_protocol_fee_amount = self.calculate_protocol_fee_amount(base_amount);
+        let protocol_fees_to_redeem = self.protocol_base_fees_to_redeem.checked_add(base_protocol_fee_amount).unwrap();
         let base_amount_after_fees = base_amount.checked_sub(base_fee_amount).unwrap().checked_sub(base_protocol_fee_amount).unwrap();
-
+        
         let new_base_liquidity =self.base_liquidity.checked_add(base_amount_after_fees).unwrap() ;
         let new_quote_liquidity = (self.sqrt_constant_product / Q64_64::sqrt_from_u128(new_base_liquidity as u128)).square_as_u64();
-
+        self.validate_swap_constant_product(new_base_liquidity, new_quote_liquidity)?;
+        
         let quote_delta = self.quote_liquidity.checked_sub(new_quote_liquidity).unwrap();
-
-        require!(quote_delta.abs_diff(estimated_quote_amount) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
-        self.check_constant_product_after_swap(new_base_liquidity, new_quote_liquidity)?;
+        
+        require!(quote_delta > 0, ErrorCode::SwapResultIsZero);
+        require!(quote_delta.abs_diff(estimated_result) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
 
         Ok(SwapPayload::new(
-            base_fee_amount + base_amount_after_fees,
-            base_protocol_fee_amount,
+            new_base_liquidity + base_fee_amount,
+            new_quote_liquidity,
+            protocol_fees_to_redeem,
             quote_delta,
             true
         ))
     }
-    pub fn calculate_quote_to_base_swap_payload(&self, quote_amount: u64, estimated_base_amount: u64, allowed_slippage: u64) -> Result<SwapPayload>{
+    pub fn get_quote_to_base_swap_payload(&self, quote_amount: u64, estimated_result: u64, allowed_slippage: u64) -> Result<SwapPayload>{
         require!(self.quote_liquidity > 0, ErrorCode::QuoteLiquidityIsZero);
         require!(self.base_liquidity > 0, ErrorCode::BaseLiquidityIsZero);
         require!(quote_amount > 0, ErrorCode::SwapAmountIsZero);
-
+        require!(estimated_result > 0, ErrorCode::EstimatedResultIsZero);
+        
         let quote_fee_amount = self.calculate_providers_fee_amount(quote_amount);
         let quote_protocol_fee_amount = self.calculate_protocol_fee_amount(quote_amount);
+        let protocol_fees_to_redeem = self.protocol_quote_fees_to_redeem.checked_add(quote_protocol_fee_amount).unwrap();
         let quote_amount_after_fees = quote_amount.checked_sub(quote_fee_amount).unwrap().checked_sub(quote_protocol_fee_amount).unwrap();
 
         let new_quote_liquidity = self.quote_liquidity.checked_add(quote_amount_after_fees).unwrap();
         let new_base_liquidity = (self.sqrt_constant_product / Q64_64::sqrt_from_u128(new_quote_liquidity as u128)).square_as_u64();
-
+        self.validate_swap_constant_product(new_base_liquidity, new_quote_liquidity)?;
+        
         let base_delta = self.base_liquidity.checked_sub(new_base_liquidity).unwrap();
 
-        require!(base_delta.abs_diff(estimated_base_amount) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
-        self.check_constant_product_after_swap(new_base_liquidity, new_quote_liquidity)?;
-
+        require!(base_delta > 0, ErrorCode::SwapResultIsZero);
+        require!(base_delta.abs_diff(estimated_result) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
+        
         Ok(SwapPayload::new(
-            quote_fee_amount + quote_amount_after_fees,
-            quote_protocol_fee_amount,
+            new_base_liquidity,
+            new_quote_liquidity + quote_fee_amount,
+            protocol_fees_to_redeem,
             base_delta,
             false
         ))
@@ -147,30 +188,38 @@ impl CpAmm {
         self.quote_vault = quote_vault.key();
         self.locked_lp_vault = locked_lp_vault.key();
     }
-    pub(crate) fn swap(&mut self, swap_payload: SwapPayload) -> Result<()> {
+    pub(crate) fn provide(&mut self, provide_payload: ProvidePayload) -> (){
+        self.base_liquidity = provide_payload.base_liquidity;
+        self.quote_liquidity = provide_payload.quote_liquidity;
+        self.lp_tokens_supply = provide_payload.lp_tokens_supply;
+        self.sqrt_constant_product = provide_payload.sqrt_constant_product;
+        self.base_quote_ratio = provide_payload.base_quote_ratio;
+    }
+    pub(crate) fn swap(&mut self, swap_payload: SwapPayload) -> () {
+        self.base_liquidity = swap_payload.base_liquidity;
+        self.quote_liquidity = swap_payload.quote_liquidity;
         if swap_payload.is_in_out(){
-            self.base_liquidity = self.base_liquidity.checked_add(swap_payload.in_amount_to_add()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
-            self.quote_liquidity = self.quote_liquidity.checked_sub(swap_payload.out_amount_to_withdraw()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
-            self.protocol_base_fees_to_redeem = self.protocol_base_fees_to_redeem.checked_add(swap_payload.in_protocol_fee).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
+            self.protocol_base_fees_to_redeem = swap_payload.protocol_fees_to_redeem
         }
         else{
-            self.quote_liquidity = self.quote_liquidity.checked_add(swap_payload.in_amount_to_add()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
-            self.base_liquidity = self.base_liquidity.checked_sub(swap_payload.out_amount_to_withdraw()).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
-            self.protocol_quote_fees_to_redeem = self.protocol_quote_fees_to_redeem.checked_add(swap_payload.in_protocol_fee).ok_or(ErrorCode::UpdateAfterSwapOverflow)?;
+            self.protocol_quote_fees_to_redeem = swap_payload.protocol_fees_to_redeem;
         }
         self.sqrt_constant_product = self.calculate_sqrt_constant_product();
         self.base_quote_ratio = self.calculate_base_quote_ratio();
-        Ok(())
     }
 
-    fn check_constant_product_after_swap(&self, new_base_liquidity: u64, new_quote_liquidity: u64) -> Result<()>{
+    fn calculate_and_validate_liquidity_ratio(&self, new_base_liquidity: u64, new_quote_liquidity: u64) -> Result<Q64_64>{
+        require!(new_base_liquidity > 0, ErrorCode::NewBaseLiquidityIsZero);
+        require!(new_quote_liquidity > 0, ErrorCode::NewQuoteLiquidityIsZero);
         let new_sqrt_constant_product = Q64_64::sqrt_from_u128(new_base_liquidity as u128 * new_quote_liquidity as u128);
         let difference = self.sqrt_constant_product.abs_diff(new_sqrt_constant_product);
         let allowed_difference = self.sqrt_constant_product * Q64_64::from_f64(Self::SWAP_CONSTANT_PRODUCT_TOLERANCE);
         require!(difference <= allowed_difference, ErrorCode::SwapConstantProductToleranceExceeded);
-        Ok(())
+        Ok(new_sqrt_constant_product)
     }
-    fn check_ratio_after_liquidity_adjust(&self, new_base_liquidity: u64, new_quote_liquidity: u64) -> Result<()>{
+    fn validate_swap_constant_product(&self, new_base_liquidity: u64, new_quote_liquidity: u64) -> Result<()>{
+        require!(new_base_liquidity > 0, ErrorCode::NewBaseLiquidityIsZero);
+        require!(new_quote_liquidity > 0, ErrorCode::NewQuoteLiquidityIsZero);
         let new_base_quote_ratio = Q64_64::from_u64(new_base_liquidity) / Q64_64::from_u64(new_quote_liquidity);
         let difference = self.base_quote_ratio.abs_diff(new_base_quote_ratio);
         let allowed_difference = self.base_quote_ratio * Q64_64::from_f64(Self::ADJUST_LIQUIDITY_RATIO_TOLERANCE);
@@ -262,50 +311,45 @@ impl LaunchPayload {
     pub fn initial_locked_liquidity(&self) -> u64{
         self.initial_locked_liquidity
     }
-    pub fn sqrt_constant_product(&self) -> Q64_64{
-        self.sqrt_constant_product
-    }
-    pub fn base_quote_ratio(&self) -> Q64_64{
-        self.base_quote_ratio
-    }
-    pub fn base_liquidity(&self) -> u64{
-        self.base_liquidity
-    }
-    pub fn quote_liquidity(&self) -> u64{
-        self.quote_liquidity
-    }
-    pub fn lp_tokens_supply(&self) -> u64{
-        self.lp_tokens_supply
-    }
     pub fn launch_liquidity(&self) -> u64{
         self.lp_tokens_supply.checked_sub(self.initial_locked_liquidity).unwrap()
     }
 }
 
+pub struct ProvidePayload {
+    sqrt_constant_product: Q64_64,
+    base_quote_ratio: Q64_64,
+    base_liquidity: u64,
+    quote_liquidity: u64,
+    lp_tokens_supply: u64,
+    lp_tokens_to_mint: u64,
+}
+impl ProvidePayload {
+    pub fn lp_tokens_to_mint(&self) -> u64{
+        self.lp_tokens_to_mint
+    }
+}
+
 pub struct SwapPayload {
-    in_amount_to_add: u64,
-    in_protocol_fee: u64,
-    out_amount_to_withdraw: u64,
+    base_liquidity: u64,
+    quote_liquidity: u64,
+    protocol_fees_to_redeem: u64,
+    amount_to_withdraw: u64,
     is_in_out: bool,
 }
 
 impl SwapPayload {
-    fn new(in_amount_to_add: u64, in_protocol_fee: u64, out_amount_to_withdraw: u64, is_in_out: bool) -> Self {
+    fn new(base_liquidity: u64, quote_liquidity: u64, protocol_fees_to_redeem: u64, amount_to_withdraw: u64, is_in_out: bool) -> Self {
         Self{
-            in_amount_to_add,
-            in_protocol_fee,
-            out_amount_to_withdraw,
+            base_liquidity,
+            quote_liquidity,
+            protocol_fees_to_redeem,
+            amount_to_withdraw,
             is_in_out,
         }
     }
-    pub fn in_amount_to_add(&self) -> u64{
-        self.in_amount_to_add
-    }
-    pub fn in_protocol_fee(&self) -> u64{
-        self.in_protocol_fee
-    }
-    pub fn out_amount_to_withdraw(&self) -> u64{
-        self.out_amount_to_withdraw
+    pub fn amount_to_withdraw(&self) -> u64{
+        self.amount_to_withdraw
     }
     pub fn is_in_out(&self) -> bool{
         self.is_in_out

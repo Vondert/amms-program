@@ -42,4 +42,7 @@ pub mod cpmm {
     pub fn launch_cp_amm(ctx: Context<LaunchCpAmm>, base_liquidity: u64, quote_liquidity: u64) -> Result<()>{
         launch_cp_amm::handler(ctx, base_liquidity, quote_liquidity)
     }
+    pub fn provide_to_cp_amm(ctx: Context<ProvideToCpAmm>, base_liquidity: u64, quote_liquidity: u64) -> Result<()>{
+        provide_to_cp_amm::handler(ctx, base_liquidity, quote_liquidity)
+    }
 }
