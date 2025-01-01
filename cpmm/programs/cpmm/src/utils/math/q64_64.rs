@@ -93,6 +93,9 @@ impl Q64_64 {
         let result = (U256::from(self.value) * U256::from(self.value)) >> (Self::FRACTIONAL_BITS * 3);
         result.as_u64()
     }
+    pub fn is_zero(&self) -> bool{
+        self.value == 0
+    }
 }
 
 impl Add for Q64_64 {

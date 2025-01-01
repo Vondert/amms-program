@@ -2,64 +2,85 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
-    // Amms 
+    // AmmsConfig
     #[msg("The provided fee rate for AmmsConfig exceeds the maximum allowed value of 10000 basis points (100%).")]
     ConfigFeeRateExceeded,
-    
-    
-    // CpAmm Swap
+
+    // CpAmm state errors
     #[msg("Quote liquidity in CpAmm is zero. Cannot perform swap operation.")]
     QuoteLiquidityIsZero,
 
     #[msg("Base liquidity in CpAmm is zero. Cannot perform swap operation.")]
     BaseLiquidityIsZero,
 
+    #[msg("Liquidity tokens supply is zero.")]
+    LpTokensSupplyIsZero,
+    
+    #[msg("CpAmm is not launched.")]
+    CpAmmNotLaunched,
+
+    #[msg("CpAmm is not initialized.")]
+    CpAmmNotInitialized,
+
+    #[msg("CpAmm has already been initialized.")]
+    CpAmmAlreadyInitialized,
+
+    #[msg("CpAmm has already been launched.")]
+    CpAmmAlreadyLaunched,
+    
+    // CpAmm operations inputs errors
+    #[msg("Provided quote liquidity is zero. Cannot perform operation.")]
+    ProvidedQuoteLiquidityIsZero,
+
+    #[msg("Provided base liquidity is zero. Cannot perform operation.")]
+    ProvidedBaseLiquidityIsZero,
+
+    #[msg("Provided liquidity tokens is zero. Cannot perform operation.")]
+    ProvidedLpTokensIsZero,
+    
     #[msg("The provided amount for the swap operation is zero. Please provide a positive value.")]
     SwapAmountIsZero,
 
     #[msg("Estimated result of the swap operation is zero. Please provide a positive value.")]
     EstimatedResultIsZero,
+    
+    // CpAmm operations errors
+    #[msg("Launch liquidity must be 4 times bigger then initial locked liquidity.")]
+    LaunchLiquidityTooSmall,
 
-    #[msg("The calculated slippage for the swap exceeds the allowed slippage tolerance.")]
-    SwapSlippageExceeded,
+    #[msg("Liquidity tokens to mints is zero.")]
+    LpTokensToMintIsZero,
 
+    #[msg("Liquidity tokens left supply is zero. Withdraw operation will drain the pool.")]
+    LpTokensLeftSupplyIsZero,
+    
+    #[msg("Zero base tokens cannot be withdrawn.")]
+    BaseWithdrawAmountIsZero,
+
+    #[msg("Zero quote tokens cannot be withdrawn.")]
+    QuoteWithdrawAmountIsZero,
+
+    #[msg("Postfee swap amount is zero. Cannot perform operation")]
+    PostfeeSwapAmountIsZero,
+    
     #[msg("Result of the swap operation is zero. Cannot perform operation.")]
     SwapResultIsZero,
-
-    #[msg("The calculated constant product after the swap exceeds the allowed tolerance.")]
-    SwapConstantProductToleranceExceeded,
     
-    // CpAmm any liquidity operation
+    #[msg("The calculated slippage for the swap exceeds the allowed slippage tolerance.")]
+    SwapSlippageExceeded,
     
+    // CpAmm integrity errors
     #[msg("New quote liquidity for CpAmm is zero. Cannot perform operation.")]
     NewQuoteLiquidityIsZero,
 
     #[msg("New base liquidity for CpAmm is zero. Cannot perform operation.")]
     NewBaseLiquidityIsZero,
     
-    // CpAmm Launch, Provide and Withdraw
+    #[msg("The calculated constant product exceeds the allowed tolerance.")]
+    ConstantProductToleranceExceeded,
 
-    #[msg("Provided quote liquidity is zero. Cannot perform operation.")]
-    ProvidedQuoteLiquidityIsZero,
-
-    #[msg("Provided base liquidity is zero. Cannot perform operation.")]
-    ProvidedBaseLiquidityIsZero,
-    
-    #[msg("Launch liquidity must be 4 times bigger then initial locked liquidity.")]
-    LaunchLiquidityTooSmall,
-
-    #[msg("The calculated base-to-quote liquidity ratio after liquidity adjustment exceeds the allowed tolerance.")]
-    AdjustLiquidityRatioToleranceExceeded,
-    
-    #[msg("Liquidity tokens to mints is zero.")]
-    LiquidityTokensToMintIsZero,
-/*    #[msg("Overflow occurred while updating liquidity values after the swap.")]
-    UpdateAfterSwapOverflow,*/
-
-/*    #[msg("Provided total fee for CpAmm exceeds the maximum allowed value of 10000 basis points (100%).")]
-    CpAmmFeeRateExceeded,*/
-    
-
+    #[msg("The calculated base-to-quote liquidity ratio exceeds the allowed tolerance.")]
+    LiquidityRatioToleranceExceeded,
     
 
 
@@ -83,16 +104,4 @@ pub enum ErrorCode {
 
     #[msg("Burning the requested amount of liquidity tokens cause supply overflow.")]
     LiquidityBurnOverflow,
-    
-    #[msg("CpAmm is not initialized.")]
-    CpAmmNotInitialized,
-
-    #[msg("CpAmm has already been initialized.")]
-    CpAmmAlreadyInitialized,
-
-    #[msg("CpAmm is not launched.")]
-    CpAmmNotLaunched,
-
-    #[msg("CpAmm has already been launched.")]
-    CpAmmAlreadyLaunched,
 }

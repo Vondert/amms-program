@@ -37,6 +37,6 @@ pub(crate) fn handler(ctx: Context<InitializeAmmsConfig>, protocol_fee_rate_basi
         ctx.accounts.amms_configs_manager.configs_count,
         ctx.bumps.amms_config
     )?;
-    ctx.accounts.amms_configs_manager.configs_count = ctx.accounts.amms_configs_manager.configs_count.checked_add(1).unwrap();
+    ctx.accounts.amms_configs_manager.increment_configs_count();
     Ok(())
 }
