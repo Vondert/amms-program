@@ -45,4 +45,7 @@ pub mod cpmm {
     pub fn provide_to_cp_amm(ctx: Context<ProvideToCpAmm>, base_liquidity: u64, quote_liquidity: u64) -> Result<()>{
         provide_to_cp_amm::handler(ctx, base_liquidity, quote_liquidity)
     }
+    pub fn withdraw_from_cp_amm(ctx: Context<WithdrawFromCpAmm>, lp_tokens: u64) -> Result<()>{
+        withdraw_from_cp_amm::handler(ctx, lp_tokens)
+    }
 }

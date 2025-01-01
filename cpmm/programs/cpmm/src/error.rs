@@ -7,10 +7,10 @@ pub enum ErrorCode {
     ConfigFeeRateExceeded,
 
     // CpAmm state errors
-    #[msg("Quote liquidity in CpAmm is zero. Cannot perform swap operation.")]
+    #[msg("Quote liquidity is zero.")]
     QuoteLiquidityIsZero,
 
-    #[msg("Base liquidity in CpAmm is zero. Cannot perform swap operation.")]
+    #[msg("Base liquidity is zero.")]
     BaseLiquidityIsZero,
 
     #[msg("Liquidity tokens supply is zero.")]
@@ -22,64 +22,64 @@ pub enum ErrorCode {
     #[msg("CpAmm is not initialized.")]
     CpAmmNotInitialized,
 
-    #[msg("CpAmm has already been initialized.")]
+    #[msg("CpAmm is already initialized.")]
     CpAmmAlreadyInitialized,
 
-    #[msg("CpAmm has already been launched.")]
+    #[msg("CpAmm is already launched.")]
     CpAmmAlreadyLaunched,
     
     // CpAmm operations inputs errors
-    #[msg("Provided quote liquidity is zero. Cannot perform operation.")]
+    #[msg("Provided quote liquidity is zero.")]
     ProvidedQuoteLiquidityIsZero,
 
-    #[msg("Provided base liquidity is zero. Cannot perform operation.")]
+    #[msg("Provided base liquidity is zero.")]
     ProvidedBaseLiquidityIsZero,
 
-    #[msg("Provided liquidity tokens is zero. Cannot perform operation.")]
+    #[msg("Provided liquidity tokens are zero.")]
     ProvidedLpTokensIsZero,
-    
-    #[msg("The provided amount for the swap operation is zero. Please provide a positive value.")]
+
+    #[msg("Swap amount cannot be zero.")]
     SwapAmountIsZero,
 
-    #[msg("Estimated result of the swap operation is zero. Please provide a positive value.")]
+    #[msg("Estimated swap result cannot be zero.")]
     EstimatedResultIsZero,
     
     // CpAmm operations errors
-    #[msg("Launch liquidity must be 4 times bigger then initial locked liquidity.")]
+    #[msg("Launch liquidity must be at least 4 times greater than the initial locked liquidity.")]
     LaunchLiquidityTooSmall,
 
-    #[msg("Liquidity tokens to mints is zero.")]
+    #[msg("Calculated liquidity tokens to mint is zero.")]
     LpTokensToMintIsZero,
 
-    #[msg("Liquidity tokens left supply is zero. Withdraw operation will drain the pool.")]
-    LpTokensLeftSupplyIsZero,
-    
-    #[msg("Zero base tokens cannot be withdrawn.")]
+    #[msg("Base token withdrawal amount is zero.")]
     BaseWithdrawAmountIsZero,
 
-    #[msg("Zero quote tokens cannot be withdrawn.")]
+    #[msg("Quote token withdrawal amount is zero.")]
     QuoteWithdrawAmountIsZero,
 
-    #[msg("Postfee swap amount is zero. Cannot perform operation")]
+    #[msg("Post-fee swap amount is zero.")]
     PostfeeSwapAmountIsZero,
     
-    #[msg("Result of the swap operation is zero. Cannot perform operation.")]
+    #[msg("Swap result is zero.")]
     SwapResultIsZero,
     
-    #[msg("The calculated slippage for the swap exceeds the allowed slippage tolerance.")]
+    #[msg("Calculated slippage exceeds allowed tolerance.")]
     SwapSlippageExceeded,
     
     // CpAmm integrity errors
-    #[msg("New quote liquidity for CpAmm is zero. Cannot perform operation.")]
+    #[msg("Liquidity token supply after withdrawal is zero. The pool cannot be drained completely.")]
+    LpTokensLeftSupplyIsZero,
+    
+    #[msg("New quote liquidity is zero. Operation cannot proceed. The pool cannot be drained completely.")]
     NewQuoteLiquidityIsZero,
 
-    #[msg("New base liquidity for CpAmm is zero. Cannot perform operation.")]
+    #[msg("New base liquidity is zero. Operation cannot proceed. The pool cannot be drained completely.")]
     NewBaseLiquidityIsZero,
-    
-    #[msg("The calculated constant product exceeds the allowed tolerance.")]
+
+    #[msg("Constant product tolerance exceeded.")]
     ConstantProductToleranceExceeded,
 
-    #[msg("The calculated base-to-quote liquidity ratio exceeds the allowed tolerance.")]
+    #[msg("Liquidity ratio tolerance exceeded.")]
     LiquidityRatioToleranceExceeded,
     
 

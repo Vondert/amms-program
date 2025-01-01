@@ -130,12 +130,12 @@ pub(crate) fn handler(ctx: Context<LaunchCpAmm>, base_liquidity: u64, quote_liqu
     let quote_liquidity_to_provide = provide_quote_liquidity_instruction.get_amount_after_fee();
     
     let launch_payload = ctx.accounts.cp_amm.get_launch_payload(base_liquidity_to_provide, quote_liquidity_to_provide)?;
+
+    provide_base_liquidity_instruction.execute(None)?;
+    provide_quote_liquidity_instruction.execute(None)?;
     
     let launch_liquidity_mint_instruction = Box::new(ctx.accounts.get_launch_liquidity_mint_instruction(launch_payload.launch_liquidity())?);
     let initial_locked_liquidity_mint_instruction = Box::new(ctx.accounts.get_initial_locked_liquidity_mint_instruction(launch_payload.initial_locked_liquidity())?);
-    
-    provide_base_liquidity_instruction.execute(None)?;
-    provide_quote_liquidity_instruction.execute(None)?;
     
     let cp_amm_seeds = ctx.accounts.cp_amm.seeds();
     let mint_instruction_seeds: &[&[&[u8]]] = &[&cp_amm_seeds];
