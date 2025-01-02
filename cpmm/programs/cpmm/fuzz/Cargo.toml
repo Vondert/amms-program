@@ -1,0 +1,16 @@
+[package]
+name = "fuzz"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cpmm = { path = "../" }
+
+[build-dependencies]
+libfuzzer-sys = "0.4.8"
+
+[dev-dependencies]
+arbitrary = "1.4.1"
+
+[features]
+fuzzing = []
