@@ -133,7 +133,7 @@ pub(crate) fn handler(ctx: Context<LaunchCpAmm>, base_liquidity: u64, quote_liqu
 
     provide_base_liquidity_instruction.execute(None)?;
     provide_quote_liquidity_instruction.execute(None)?;
-    
+
     let launch_liquidity_mint_instruction = Box::new(ctx.accounts.get_launch_liquidity_mint_instruction(launch_payload.launch_liquidity())?);
     let initial_locked_liquidity_mint_instruction = Box::new(ctx.accounts.get_initial_locked_liquidity_mint_instruction(launch_payload.initial_locked_liquidity())?);
     

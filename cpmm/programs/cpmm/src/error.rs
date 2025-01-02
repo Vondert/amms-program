@@ -15,7 +15,7 @@ pub enum ErrorCode {
 
     #[msg("Liquidity tokens supply is zero.")]
     LpTokensSupplyIsZero,
-    
+
     #[msg("CpAmm is not launched.")]
     CpAmmNotLaunched,
 
@@ -27,7 +27,7 @@ pub enum ErrorCode {
 
     #[msg("CpAmm is already launched.")]
     CpAmmAlreadyLaunched,
-    
+
     // CpAmm operations inputs errors
     #[msg("Provided quote liquidity is zero.")]
     ProvidedQuoteLiquidityIsZero,
@@ -43,7 +43,7 @@ pub enum ErrorCode {
 
     #[msg("Estimated swap result cannot be zero.")]
     EstimatedResultIsZero,
-    
+
     // CpAmm operations errors
     #[msg("Launch liquidity must be at least 4 times greater than the initial locked liquidity.")]
     LaunchLiquidityTooSmall,
@@ -59,17 +59,24 @@ pub enum ErrorCode {
 
     #[msg("Post-fee swap amount is zero.")]
     PostfeeSwapAmountIsZero,
-    
+
     #[msg("Swap result is zero.")]
     SwapResultIsZero,
-    
+
     #[msg("Calculated slippage exceeds allowed tolerance.")]
     SwapSlippageExceeded,
+    
+    #[msg("Overflow error when providing liquidity.")]
+    ProvideOverflowError,
+    #[msg("Overflow error when withdrawing liquidity.")]
+    WithdrawOverflowError,
+    #[msg("Overflow error when swapping.")]
+    SwapOverflowError,
     
     // CpAmm integrity errors
     #[msg("Liquidity token supply after withdrawal is zero. The pool cannot be drained completely.")]
     LpTokensLeftSupplyIsZero,
-    
+
     #[msg("New quote liquidity is zero. Operation cannot proceed. The pool cannot be drained completely.")]
     NewQuoteLiquidityIsZero,
 

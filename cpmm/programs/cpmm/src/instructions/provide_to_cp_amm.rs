@@ -109,10 +109,10 @@ pub(crate) fn handler(ctx: Context<ProvideToCpAmm>, base_liquidity: u64, quote_l
     provide_quote_liquidity_instruction.execute(None)?;
 
     let liquidity_mint_instruction = Box::new(ctx.accounts.get_liquidity_mint_instruction(provide_payload.lp_tokens_to_mint())?);
-    
+
     let cp_amm_seeds = ctx.accounts.cp_amm.seeds();
     let mint_instruction_seeds: &[&[&[u8]]] = &[&cp_amm_seeds];
-    
+
     liquidity_mint_instruction.execute(Some(mint_instruction_seeds))?;
     
     ctx.accounts.cp_amm.provide(provide_payload);

@@ -5,7 +5,7 @@ use anchor_spl::token::Token;
 use anchor_spl::token_2022::Token2022;
 use anchor_spl::token_interface::{Mint, TokenAccount};
 use crate::state::{AmmsConfig, CpAmm};
-use crate::utils::token_instructions::{BurnTokensInstructions, MintTokensInstructions, TransferTokensInstruction};
+use crate::utils::token_instructions::{BurnTokensInstructions, TransferTokensInstruction};
 
 #[derive(Accounts)]
 pub struct WithdrawFromCpAmm<'info>{
@@ -116,6 +116,7 @@ pub(crate) fn handler(ctx: Context<WithdrawFromCpAmm>, lp_tokens: u64) -> Result
 
     withdraw_base_liquidity_instruction.execute(Some(withdraw_instruction_seeds))?;
     withdraw_quote_liquidity_instruction.execute(Some(withdraw_instruction_seeds))?;
+    
 
     ctx.accounts.cp_amm.withdraw(withdraw_payload);
 
