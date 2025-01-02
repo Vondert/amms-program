@@ -64,10 +64,11 @@ pub struct CpAmm {
 impl CpAmm {
     pub const SEED: &'static [u8] = b"cp_amm";
     pub const LP_MINT_INITIAL_DECIMALS: u8 = 5;
-    // 0.0001%
-    const SWAP_CONSTANT_PRODUCT_TOLERANCE: f64 = 0.000001;
-    // 0.0001%
-    const ADJUST_LIQUIDITY_RATIO_TOLERANCE: f64 = 0.000001;
+    // 0.0001% f64 = 0.000001
+    const SWAP_CONSTANT_PRODUCT_TOLERANCE: Q64_64 = Q64_64::new(18446744073710);
+    // 0.0001% f64 = 0.000001
+    const ADJUST_LIQUIDITY_RATIO_TOLERANCE: Q64_64 = Q64_64::new(18446744073710);
+    
     pub fn seeds(&self) -> [&[u8]; 3] {
         [Self::SEED, self.lp_mint.as_ref(), self.bump.as_ref()]
     }
@@ -153,7 +154,7 @@ impl CpAmm {
         require!(new_quote_liquidity > 0, ErrorCode::NewQuoteLiquidityIsZero);
         let new_base_quote_ratio_sqrt = calculate_base_quote_ratio_sqrt(new_base_liquidity, new_quote_liquidity);
         let difference = self.base_quote_ratio_sqrt.abs_diff(new_base_quote_ratio_sqrt);
-        let allowed_difference = self.base_quote_ratio_sqrt * Q64_64::from_f64(Self::ADJUST_LIQUIDITY_RATIO_TOLERANCE);
+        let allowed_difference = self.base_quote_ratio_sqrt * Self::ADJUST_LIQUIDITY_RATIO_TOLERANCE;
         require!(difference <= allowed_difference, ErrorCode::LiquidityRatioToleranceExceeded);
         Ok(new_base_quote_ratio_sqrt)
     }
@@ -162,7 +163,7 @@ impl CpAmm {
         require!(new_quote_liquidity > 0, ErrorCode::NewQuoteLiquidityIsZero);
         let new_constant_product_sqrt = calculate_constant_product_sqrt(new_base_liquidity, new_quote_liquidity);
         let difference = self.constant_product_sqrt.abs_diff(new_constant_product_sqrt);
-        let allowed_difference = self.constant_product_sqrt * Q64_64::from_f64(Self::SWAP_CONSTANT_PRODUCT_TOLERANCE);
+        let allowed_difference = self.constant_product_sqrt * Self::SWAP_CONSTANT_PRODUCT_TOLERANCE;
         require!(difference <= allowed_difference, ErrorCode::ConstantProductToleranceExceeded);
         Ok(())
     }

@@ -12,7 +12,7 @@ impl Q64_64 {
     pub const FRACTIONAL_MASK: u128 = (1u128 << Self::FRACTIONAL_BITS) - 1;
     pub const FRACTIONAL_SCALE: f64 = 18446744073709551616.0;
     pub const MAX: Self = Q64_64 { value: u128::MAX };
-    pub fn new(value: u128) -> Self {
+    pub const fn new(value: u128) -> Self {
         Q64_64 { value }
     }
     pub fn from_u128(value: u128) -> Self {
@@ -145,9 +145,9 @@ mod tests {
 
     
 
-    #[test]
+/*    #[test]
     fn test_conversion_cycle() {
-        let q6464_1 = Q64_64::from_u64(1);
+        let q6464_1 = Q64_64::from_f64(1);
         let q6464_2 = Q64_64::from_u64(u64::MAX);
         let res = q6464_1 / q6464_2;
         let res2 = 1.0 / 18446744073709551616.0;
@@ -155,5 +155,14 @@ mod tests {
         println!("res formatted {}", res.to_f64());
         println!("res2 formatted {}", res2);
         assert_eq!(18446744073709551616.0, 0.0, "Conversion cycle mismatch");
+    }*/
+    #[test]
+    fn test_1() {
+        let q6464 = Q64_64::from_f64(0.000001);
+        let estimated = q6464.to_f64();
+        let epsilon = 1e-12;
+        println!("{}", q6464.value);
+        //assert!((estimated - 0.000001).abs() < epsilon, "Conversion cycle mismatch");
+        assert_eq!(estimated.abs(), 0.000001, "Conversion cycle mismatch");
     }
 }
