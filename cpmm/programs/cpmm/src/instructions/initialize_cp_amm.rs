@@ -4,7 +4,10 @@ use anchor_spl::{
     token::{Mint, Token, TokenAccount},
     token_interface
 };
-use crate::state::{AmmsConfig, CpAmm};
+use crate::state::{AmmsConfig, cp_amm::{
+    CpAmm, 
+    CpAmmCalculate
+}};
 use crate::utils::validate_tradable_mint;
 
 #[derive(Accounts)]

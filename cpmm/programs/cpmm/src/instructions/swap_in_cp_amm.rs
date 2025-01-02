@@ -4,7 +4,7 @@ use anchor_spl::token;
 use anchor_spl::token::Token;
 use anchor_spl::token_2022::Token2022;
 use anchor_spl::token_interface::{Mint, TokenAccount};
-use crate::state::{AmmsConfig, CpAmm};
+use crate::state::{AmmsConfig, cp_amm::CpAmm};
 use crate::utils::token_instructions::{TransferTokensInstruction};
 
 #[derive(Accounts)]

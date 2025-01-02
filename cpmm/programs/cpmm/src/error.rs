@@ -48,17 +48,14 @@ pub enum ErrorCode {
     #[msg("Launch liquidity must be at least 4 times greater than the initial locked liquidity.")]
     LaunchLiquidityTooSmall,
 
-    #[msg("Calculated liquidity tokens to mint is zero.")]
-    LpTokensToMintIsZero,
+    #[msg("Failed to calculate liquidity tokens to mint due to invalid input or overflow.")]
+    LpTokensCalculationFailed,
 
-    #[msg("Base token withdrawal amount is zero.")]
-    BaseWithdrawAmountIsZero,
-
-    #[msg("Quote token withdrawal amount is zero.")]
-    QuoteWithdrawAmountIsZero,
-
-    #[msg("Post-fee swap amount is zero.")]
-    PostfeeSwapAmountIsZero,
+    #[msg("Failed to calculate afterswap state due to invalid input or overflow.")]
+    AfterswapCalculationFailed,
+    
+    #[msg("Failed to calculate withdraw liquidity due to invalid input or overflow.")]
+    WithdrawLiquidityCalculationFailed,
 
     #[msg("Swap result is zero.")]
     SwapResultIsZero,
@@ -74,22 +71,20 @@ pub enum ErrorCode {
     SwapOverflowError,
     
     // CpAmm integrity errors
-    #[msg("Liquidity token supply after withdrawal is zero. The pool cannot be drained completely.")]
-    LpTokensLeftSupplyIsZero,
+    #[msg("Failed to calculate base-to-quote liquidity ratio due to invalid input or overflow.")]
+    BaseQuoteRatioCalculationFailed,
 
-    #[msg("New quote liquidity is zero. Operation cannot proceed. The pool cannot be drained completely.")]
-    NewQuoteLiquidityIsZero,
-
-    #[msg("New base liquidity is zero. Operation cannot proceed. The pool cannot be drained completely.")]
-    NewBaseLiquidityIsZero,
-
+    #[msg("Failed to calculate constant product due to invalid input or overflow.")]
+    ConstantProductCalculationFailed,
+    
     #[msg("Constant product tolerance exceeded.")]
     ConstantProductToleranceExceeded,
 
     #[msg("Liquidity ratio tolerance exceeded.")]
     LiquidityRatioToleranceExceeded,
     
-
+    
+    
 
     #[msg("Tradable mint for CpAmm has freeze authority.")]
     MintHasFreezeAuthority,

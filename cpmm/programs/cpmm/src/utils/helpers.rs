@@ -40,15 +40,3 @@ pub(crate) fn validate_tradable_mint(tradable_mint: &InterfaceAccount<Mint>) -> 
     }
     Err(ErrorCode::UnsupportedTradableMint.into())
 }
-
-pub(crate) fn check_swap_result(swap_result: u64, estimated_swap_result: u64, allowed_slippage:u64) -> Result<()>{
-    require!(swap_result > 0, ErrorCode::SwapResultIsZero);
-    require!(swap_result.abs_diff(estimated_swap_result) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
-    Ok(())
-}
-pub(crate) fn calculate_base_quote_ratio_sqrt(base_liquidity: u64, quote_liquidity: u64) -> Q64_64{
-    Q64_64::sqrt_from_u128((Q64_64::from_u64(base_liquidity) / Q64_64::from_u64(quote_liquidity)).raw_value())
-}
-pub(crate) fn calculate_constant_product_sqrt(base_liquidity: u64, quote_liquidity: u64) -> Q64_64{
-    Q64_64::sqrt_from_u128(base_liquidity as u128 * quote_liquidity as u128)
-}

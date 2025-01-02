@@ -7,7 +7,7 @@ use anchor_spl::token_interface::{
     TokenAccount,
     Mint
 };
-use crate::state::{AmmsConfig, CpAmm};
+use crate::state::{AmmsConfig, cp_amm::CpAmm};
 use crate::utils::token_instructions::{MintTokensInstructions, TransferTokensInstruction};
 
 #[derive(Accounts)]
