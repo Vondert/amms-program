@@ -42,7 +42,7 @@ pub(crate) trait CpAmmCalculate {
         }
         let liquidity_share = Q64_64::from_u64(lp_tokens).checked_div(Q64_64::from_u64(self.lp_tokens_supply()))?;
         let constant_product_sqrt_share = self.constant_product_sqrt().checked_mul(liquidity_share)?;
-        
+
         let base_withdraw = constant_product_sqrt_share.checked_mul(self.base_quote_ratio_sqrt())?.to_u64();
         let quote_withdraw = constant_product_sqrt_share.checked_div(self.base_quote_ratio_sqrt())?.to_u64();
         if base_withdraw == 0 || quote_withdraw == 0{
