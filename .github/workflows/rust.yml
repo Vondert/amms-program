@@ -20,9 +20,6 @@ jobs:
     - name: Set up working directory
       run: cd cpmm/programs/cpmm
 
-    - name: Build
-      run: cd cpmm/programs/cpmm && cargo build --verbose
-
     - name: Run tests
       run: cd cpmm/programs/cpmm && cargo test --verbose
 
