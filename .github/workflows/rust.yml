@@ -21,8 +21,8 @@ jobs:
       run: cd cpmm/programs/cpmm
 
     - name: Build
-      run: cd repository/cpmm/programs/cpmm && cargo build --verbose
+      run: cd cpmm/programs/cpmm && cargo build --verbose
 
     - name: Run tests
-      run: cd repository/cpmm/programs/cpmm && cargo test --verbose
+      run: cd cpmm/programs/cpmm && cargo test --verbose
 
