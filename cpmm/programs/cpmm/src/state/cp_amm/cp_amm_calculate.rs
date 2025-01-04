@@ -119,3 +119,94 @@ pub(crate) trait CpAmmCalculate {
         Some(constant_product_sqrt)
     }
 }
+
+/*#[cfg(test)]
+mod tests {
+    use crate::state::cp_amm::CpAmmCalculate;
+    use crate::utils::math::Q64_64;
+
+    struct TestCpAmm{
+        base_liquidity: u64,
+        quote_liquidity: u64,
+        constant_product_sqrt: Q64_64,
+        base_quote_ratio_sqrt: Q64_64,
+        lp_tokens_supply: u64,
+        providers_fee_rate_basis_points: u16,
+        protocol_fee_rate_basis_points: u16,
+    }
+    impl CpAmmCalculate for TestCpAmm {
+        fn constant_product_sqrt(&self) -> Q64_64 {
+            self.constant_product_sqrt
+        }
+
+        fn base_quote_ratio_sqrt(&self) -> Q64_64 {
+            self.base_quote_ratio_sqrt
+        }
+
+        fn base_liquidity(&self) -> u64 {
+            self.base_liquidity
+        }
+
+        fn quote_liquidity(&self) -> u64 {
+            self.quote_liquidity
+        }
+
+        fn lp_tokens_supply(&self) -> u64 {
+            self.lp_tokens_supply
+        }
+
+        fn providers_fee_rate_basis_points(&self) -> u16 {
+            self.providers_fee_rate_basis_points
+        }
+
+        fn protocol_fee_rate_basis_points(&self) -> u16 {
+            self.protocol_fee_rate_basis_points
+        }
+    }
+
+    mod unit_tests {
+        use super::*;
+        #[test]
+        fn test_calculate_none_base_quote_ratio_sqrt() {
+            let base_liquidity: u64 = 0;
+            let quote_liquidity: u64 = 0;
+            assert!(TestCpAmm::calculate_base_quote_ratio_sqrt(base_liquidity, quote_liquidity).is_none());
+        }
+        #[test]
+        fn test_calculate_base_quote_ratio_sqrt() {
+            let base_liquidity: u64 = 1;
+            let quote_liquidity: u64 = u64::MAX;
+            assert!(TestCpAmm::calculate_base_quote_ratio_sqrt(base_liquidity, quote_liquidity).is_some());
+        }
+        
+    }
+    mod fuzz_tests {
+        use super::*;
+        use proptest::prelude::*;
+        fn arbitrary_u128() -> impl Strategy<Value = u128> {
+            prop_oneof![
+            0..=u128::MAX,
+            Just(0),
+            Just(1),
+            Just(u128::MAX),
+            Just(u128::MAX / 2),
+            Just(u128::MAX - 1),
+            Just(1024),
+            Just(4095),
+            Just(8191),
+            Just(10000),
+            Just(12321),
+            Just(65535),
+            Just(12345),
+            Just(54321),
+            Just(99999),
+            Just(45678),
+            Just(87654),
+            Just(10001),
+            Just(9999),
+            Just(2047),
+            Just(65534)
+            ]
+        }
+    }
+}*/

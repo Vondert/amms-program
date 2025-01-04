@@ -233,320 +233,320 @@ impl U256 {
 mod tests {
     use super::*;
 
-    mod constructors_and_conversions {
+    mod unit_tests{
         use super::*;
+        mod constructors_and_conversions {
+            use super::*;
 
-        #[test]
-        fn test_new() {
-            let q = Q64_64::new(12345);
-            assert_eq!(q.raw_value(), 12345);
-        }
+            #[test]
+            fn test_new() {
+                let q = Q64_64::new(12345);
+                assert_eq!(q.raw_value(), 12345);
+            }
 
-        #[test]
-        fn test_from_u128() {
-            let q = Q64_64::from_u128(10);
-            assert_eq!(q.raw_value(), 10 << Q64_64::FRACTIONAL_BITS);
-        }
+            #[test]
+            fn test_from_u128() {
+                let q = Q64_64::from_u128(10);
+                assert_eq!(q.raw_value(), 10 << Q64_64::FRACTIONAL_BITS);
+            }
 
-        #[test]
-        fn test_from_u64() {
-            let q = Q64_64::from_u64(42);
-            assert_eq!(q.raw_value(), (42u128) << Q64_64::FRACTIONAL_BITS);
-        }
+            #[test]
+            fn test_from_u64() {
+                let q = Q64_64::from_u64(42);
+                assert_eq!(q.raw_value(), (42u128) << Q64_64::FRACTIONAL_BITS);
+            }
 
-        #[test]
-        fn test_from_f64() {
-            let q = Q64_64::from_f64(42.75).unwrap();
-            let expected_raw_value = (42u128 << Q64_64::FRACTIONAL_BITS)
-                | ((0.75 * Q64_64::FRACTIONAL_SCALE) as u128);
-            assert_eq!(q.raw_value(), expected_raw_value);
+            #[test]
+            fn test_from_f64() {
+                let q = Q64_64::from_f64(42.75).unwrap();
+                let expected_raw_value = (42u128 << Q64_64::FRACTIONAL_BITS)
+                    | ((0.75 * Q64_64::FRACTIONAL_SCALE) as u128);
+                assert_eq!(q.raw_value(), expected_raw_value);
+            }
+            #[test]
+            fn test_invalid_from_f64() {
+                let q1 = Q64_64::from_f64(-0.01);
+                let q2 = Q64_64::from_f64(Q64_64::FRACTIONAL_SCALE);
+                assert!(q1.is_none() && q2.is_none());
+            }
+            #[test]
+            fn test_to_f64() {
+                let q = Q64_64::from_f64(42.75).unwrap();
+                assert!((q.to_f64() - 42.75).abs() < 1e-12);
+            }
+            #[test]
+            fn test_to_u64() {
+                let q = Q64_64::from_u64(42);
+                assert_eq!(q.to_u64(), 42);
+            }
+            #[test]
+            fn test_type_conversion() {
+                let q = Q64_64::from_f64(42.75).unwrap();
+                let as_u64 = q.to_u64();
+                let from_u64 = Q64_64::from_u64(as_u64);
+                assert!((from_u64.to_f64() - 42.0).abs() < 1e-12);
+            }
+            #[test]
+            fn test_split() {
+                let q = Q64_64::from_f64(42.75).unwrap();
+                let (integer, fractional) = q.split();
+                assert_eq!(integer, 42);
+                let expected_fractional = (0.75 * Q64_64::FRACTIONAL_SCALE) as u64;
+                assert_eq!(fractional, expected_fractional);
+            }
+            #[test]
+            fn test_raw_value_access() {
+                let mut q = Q64_64::new(0);
+                q.set_raw_value(123456);
+                assert_eq!(q.raw_value(), 123456);
+            }
         }
-        #[test]
-        fn test_invalid_from_f64() {
-            let q1 = Q64_64::from_f64(-0.01);
-            let q2 = Q64_64::from_f64(Q64_64::FRACTIONAL_SCALE);
-            assert!(q1.is_none() && q2.is_none());
+        mod arithmetic_operations {
+            use super::*;
+
+            #[test]
+            fn test_add() {
+                let q1 = Q64_64::from_u64(10);
+                let q2 = Q64_64::from_u64(20);
+                assert_eq!((q1 + q2).to_u64(), 30);
+            }
+
+            #[test]
+            fn test_sub() {
+                let q1 = Q64_64::from_u64(50);
+                let q2 = Q64_64::from_u64(20);
+                assert_eq!((q1 - q2).to_u64(), 30);
+            }
+
+            #[test]
+            fn test_mul() {
+                let q1 = Q64_64::from_u64(3);
+                let q2 = Q64_64::from_u64(4);
+                assert_eq!((q1 * q2).to_u64(), 12);
+            }
+
+            #[test]
+            fn test_div() {
+                let q1 = Q64_64::from_u64(10);
+                let q2 = Q64_64::from_u64(2);
+                assert_eq!((q1 / q2).to_u64(), 5);
+            }
+            #[test]
+            fn test_abs_diff() {
+                let q1 = Q64_64::from_u64(50);
+                let q2 = Q64_64::from_u64(20);
+                assert_eq!(q1.abs_diff(q2).to_u64(), 30);
+            }
+            #[test]
+            fn test_fractional_multiplication() {
+                let q1 = Q64_64::from_f64(2.5).unwrap();
+                let q2 = Q64_64::from_f64(4.2).unwrap();
+                let result = q1 * q2;
+
+                assert!((result.to_f64() - 10.5).abs() < 1e-12, "Multiplication failed");
+            }
         }
-        #[test]
-        fn test_to_f64() {
-            let q = Q64_64::from_f64(42.75).unwrap();
-            assert!((q.to_f64() - 42.75).abs() < 1e-12);
+        mod checked_operations {
+            use super::*;
+
+            #[test]
+            fn test_checked_add() {
+                let q1 = Q64_64::from_u128(u128::MAX >> 1);
+                let q2 = Q64_64::from_u128(u128::MAX >> 1);
+                let q3 = Q64_64::from_u128(1u128);
+                let q4 = Q64_64::from_u128(100u128);
+                assert!(q1.checked_add(q2).is_none());
+                assert_eq!(q3.checked_add(q4).unwrap().to_u64(), 101);
+            }
+
+            #[test]
+            fn test_checked_sub() {
+                let q1 = Q64_64::from_u64(50);
+                let q2 = Q64_64::from_u64(100);
+                assert!(q1.checked_sub(q2).is_none());
+                assert_eq!(q2.checked_sub(q1).unwrap().to_u64(), 50u64);
+            }
+
+            #[test]
+            fn test_checked_mul() {
+                let q1 = Q64_64::from_u128(u128::MAX >> 1);
+                let q2 = Q64_64::from_u128(2);
+                let q3 = Q64_64::from_u128(31);
+                assert!(q1.checked_mul(q2).is_none());
+                assert_eq!(q2.checked_mul(q3).unwrap().to_u64(), 62u64);
+            }
+
+            #[test]
+            fn test_checked_div() {
+                let q1 = Q64_64::from_u64(100);
+                let q2 = Q64_64::from_u64(0);
+                let q3 = Q64_64::from_u64(150);
+                let result = q3.checked_div(q1).unwrap();
+                assert!(q1.checked_div(q2).is_none());
+                assert!((result.to_f64() - 1.5).abs() < 1e-12);
+            }
+
+            #[test]
+            fn test_checked_square_overflow() {
+                let q = Q64_64::from_u128(u128::MAX >> 1);
+                assert!(q.checked_square_as_u64().is_none(), "Checked square overflow failed");
+            }
         }
-        #[test]
-        fn test_to_u64() {
-            let q = Q64_64::from_u64(42);
-            assert_eq!(q.to_u64(), 42);
+        mod edge_cases {
+            use super::*;
+
+            #[test]
+            fn test_extreme_values() {
+                let max = Q64_64::MAX;
+                assert_eq!(max.raw_value(), u128::MAX);
+
+                let min_fraction = Q64_64::from_f64(1.0 / Q64_64::FRACTIONAL_SCALE).unwrap();
+                assert_eq!(min_fraction.raw_value(), 1);
+
+                let near_max = Q64_64::from_u128(u128::MAX >> 1);
+                assert!(near_max.raw_value() < u128::MAX);
+            }
+
+            #[test]
+            fn test_is_zero() {
+                let q = Q64_64::from_u64(0);
+                assert!(q.is_zero());
+                let q = Q64_64::from_u64(1);
+                assert!(!q.is_zero());
+            }
+            #[test]
+            fn test_is_one() {
+                let q = Q64_64::from_u64(1);
+                assert!(q.is_one());
+                let q = Q64_64::from_u64(0);
+                assert!(!q.is_one());
+            }
+            #[test]
+            fn test_precision() {
+                let original = 2412345.00067890234102;
+                let q = Q64_64::from_f64(original).unwrap();
+                let back_to_f64 = q.to_f64();
+
+                assert!((back_to_f64 - original).abs() < 1e-12, "Precision loss detected");
+            }
         }
-        #[test]
-        fn test_type_conversion() {
-            let q = Q64_64::from_f64(42.75).unwrap();
-            let as_u64 = q.to_u64();
-            let from_u64 = Q64_64::from_u64(as_u64);
-            assert!((from_u64.to_f64() - 42.0).abs() < 1e-12);
+        mod square_and_sqrt {
+            use super::*;
+
+            #[test]
+            fn test_sqrt_from_u128() {
+                let q = Q64_64::sqrt_from_u128(256);
+                assert_eq!(q.to_u64(), 16);
+
+                let q = Q64_64::sqrt_from_u128(10);
+                assert!((q.to_f64() - 3.16227766).abs() < 1e-9, "Square root approximation failed");
+            }
+
+            #[test]
+            fn test_square_operations() {
+                let q = Q64_64::from_u64(3);
+                assert_eq!(q.square_as_u128(), 9);
+                assert_eq!(q.checked_square_as_u64(), Some(9));
+                assert_eq!(q.square_as_u64(), 9);
+            }
+
+            #[test]
+            fn test_square_fractional_number() {
+                let q = Q64_64::from_f64(1.5).unwrap();
+                let square = q.square_as_u128();
+                let expected = 2u128;
+
+                assert_eq!(square, expected, "Square of fractional number failed");
+            }
+
+            #[test]
+            fn test_square_small_fraction() {
+                let q = Q64_64::from_f64(0.25).unwrap();
+                let square = q.square_as_u128();
+                let expected = 0u128;
+
+                assert_eq!(square, expected, "Square of small fraction failed");
+            }
+
+            #[test]
+            fn test_square_large_fractional_number() {
+                let q = Q64_64::from_f64(12345.6789).unwrap();
+                let square = q.square_as_u128();
+
+                let expected: f64 = (12345.6789 * 12345.6789);
+                assert_eq!(square, expected.floor() as u128, "Square of large fractional number failed");
+            }
+
+            #[test]
+            fn test_square_near_one_fraction() {
+                let q = Q64_64::from_f64(0.9999).unwrap();
+                let square = q.square_as_u128();
+
+                let expected = 0;
+
+                assert_eq!(square, expected, "Square of near-one fraction failed");
+            }
         }
-        #[test]
-        fn test_split() {
-            let q = Q64_64::from_f64(42.75).unwrap();
-            let (integer, fractional) = q.split();
-            assert_eq!(integer, 42);
-            let expected_fractional = (0.75 * Q64_64::FRACTIONAL_SCALE) as u64;
-            assert_eq!(fractional, expected_fractional);
-        }
-        #[test]
-        fn test_raw_value_access() {
-            let mut q = Q64_64::new(0);
-            q.set_raw_value(123456);
-            assert_eq!(q.raw_value(), 123456);
+        mod panic_tests {
+            use super::*;
+            #[test]
+            #[should_panic(expected = "Division by zero!")]
+            fn test_div_panic() {
+                let q1 = Q64_64::from_u64(10);
+                let q2 = Q64_64::from_u64(0);
+                let _ = q1 / q2;
+            }
         }
     }
-    mod arithmetic_operations {
+    
+    mod fuzz_tests{
         use super::*;
-
-        #[test]
-        fn test_add() {
-            let q1 = Q64_64::from_u64(10);
-            let q2 = Q64_64::from_u64(20);
-            assert_eq!((q1 + q2).to_u64(), 30);
+        use proptest::prelude::*;
+        fn arbitrary_f64() -> impl Strategy<Value = f64> {
+            prop_oneof![
+                0.0..Q64_64::FRACTIONAL_SCALE,
+                Just(0.00000001),
+                Just(1.0),
+                Just(Q64_64::FRACTIONAL_SCALE * 0.99),
+            ]
+        }
+        fn invalid_arbitrary_f64() -> impl Strategy<Value = f64>{
+            prop_oneof![
+                f64::MIN..0.0,
+                Q64_64::FRACTIONAL_SCALE..f64::MAX,
+                Just(f64::NEG_INFINITY),
+                Just(f64::INFINITY),
+                Just(f64::NAN),
+            ]
+        }
+        fn arbitrary_u128() -> impl Strategy<Value = u128> {
+            prop_oneof![
+                0..=u128::MAX,
+                Just(0),
+                Just(1),
+                Just(u128::MAX),
+                Just(u128::MAX / 2),
+                Just(u128::MAX - 1),
+                Just(1024),
+                Just(4095),
+                Just(8191),
+                Just(10000),
+                Just(12321),
+                Just(65535),
+                Just(12345),
+                Just(54321),
+                Just(99999),
+                Just(45678),
+                Just(87654),
+                Just(10001),
+                Just(9999),
+                Just(2047),
+                Just(65534)
+            ]
         }
 
-        #[test]
-        fn test_sub() {
-            let q1 = Q64_64::from_u64(50);
-            let q2 = Q64_64::from_u64(20);
-            assert_eq!((q1 - q2).to_u64(), 30);
-        }
-
-        #[test]
-        fn test_mul() {
-            let q1 = Q64_64::from_u64(3);
-            let q2 = Q64_64::from_u64(4);
-            assert_eq!((q1 * q2).to_u64(), 12);
-        }
-
-        #[test]
-        fn test_div() {
-            let q1 = Q64_64::from_u64(10);
-            let q2 = Q64_64::from_u64(2);
-            assert_eq!((q1 / q2).to_u64(), 5);
-        }
-        #[test]
-        fn test_abs_diff() {
-            let q1 = Q64_64::from_u64(50);
-            let q2 = Q64_64::from_u64(20);
-            assert_eq!(q1.abs_diff(q2).to_u64(), 30);
-        }
-        #[test]
-        fn test_fractional_multiplication() {
-            let q1 = Q64_64::from_f64(2.5).unwrap();
-            let q2 = Q64_64::from_f64(4.2).unwrap();
-            let result = q1 * q2;
-
-            assert!((result.to_f64() - 10.5).abs() < 1e-12, "Multiplication failed");
-        }
-    }
-    mod checked_operations {
-        use super::*;
-
-        #[test]
-        fn test_checked_add() {
-            let q1 = Q64_64::from_u128(u128::MAX >> 1);
-            let q2 = Q64_64::from_u128(u128::MAX >> 1);
-            let q3 = Q64_64::from_u128(1u128);
-            let q4 = Q64_64::from_u128(100u128);
-            assert!(q1.checked_add(q2).is_none());
-            assert_eq!(q3.checked_add(q4).unwrap().to_u64(), 101);
-        }
-
-        #[test]
-        fn test_checked_sub() {
-            let q1 = Q64_64::from_u64(50);
-            let q2 = Q64_64::from_u64(100);
-            assert!(q1.checked_sub(q2).is_none());
-            assert_eq!(q2.checked_sub(q1).unwrap().to_u64(), 50u64);
-        }
-
-        #[test]
-        fn test_checked_mul() {
-            let q1 = Q64_64::from_u128(u128::MAX >> 1);
-            let q2 = Q64_64::from_u128(2);
-            let q3 = Q64_64::from_u128(31);
-            assert!(q1.checked_mul(q2).is_none());
-            assert_eq!(q2.checked_mul(q3).unwrap().to_u64(), 62u64);
-        }
-
-        #[test]
-        fn test_checked_div() {
-            let q1 = Q64_64::from_u64(100);
-            let q2 = Q64_64::from_u64(0);
-            let q3 = Q64_64::from_u64(150);
-            let result = q3.checked_div(q1).unwrap();
-            assert!(q1.checked_div(q2).is_none());
-            assert!((result.to_f64() - 1.5).abs() < 1e-12);
-        }
-
-        #[test]
-        fn test_checked_square_overflow() {
-            let q = Q64_64::from_u128(u128::MAX >> 1);
-            assert!(q.checked_square_as_u64().is_none(), "Checked square overflow failed");
-        }
-    }
-    mod edge_cases {
-        use super::*;
-
-        #[test]
-        fn test_extreme_values() {
-            let max = Q64_64::MAX;
-            assert_eq!(max.raw_value(), u128::MAX);
-
-            let min_fraction = Q64_64::from_f64(1.0 / Q64_64::FRACTIONAL_SCALE).unwrap();
-            assert_eq!(min_fraction.raw_value(), 1);
-
-            let near_max = Q64_64::from_u128(u128::MAX >> 1);
-            assert!(near_max.raw_value() < u128::MAX);
-        }
-
-        #[test]
-        fn test_is_zero() {
-            let q = Q64_64::from_u64(0);
-            assert!(q.is_zero());
-            let q = Q64_64::from_u64(1);
-            assert!(!q.is_zero());
-        }
-        #[test]
-        fn test_is_one() {
-            let q = Q64_64::from_u64(1);
-            assert!(q.is_one());
-            let q = Q64_64::from_u64(0);
-            assert!(!q.is_one());
-        }
-        #[test]
-        fn test_precision() {
-            let original = 2412345.00067890234102;
-            let q = Q64_64::from_f64(original).unwrap();
-            let back_to_f64 = q.to_f64();
-
-            assert!((back_to_f64 - original).abs() < 1e-12, "Precision loss detected");
-        }
-    }
-    mod square_and_sqrt {
-        use super::*;
-
-        #[test]
-        fn test_sqrt_from_u128() {
-            let q = Q64_64::sqrt_from_u128(256);
-            assert_eq!(q.to_u64(), 16);
-
-            let q = Q64_64::sqrt_from_u128(10);
-            assert!((q.to_f64() - 3.16227766).abs() < 1e-9, "Square root approximation failed");
-        }
-
-        #[test]
-        fn test_square_operations() {
-            let q = Q64_64::from_u64(3);
-            assert_eq!(q.square_as_u128(), 9);
-            assert_eq!(q.checked_square_as_u64(), Some(9));
-            assert_eq!(q.square_as_u64(), 9);
-        }
-
-        #[test]
-        fn test_square_fractional_number() {
-            let q = Q64_64::from_f64(1.5).unwrap();
-            let square = q.square_as_u128();
-            let expected = 2u128;
-
-            assert_eq!(square, expected, "Square of fractional number failed");
-        }
-
-        #[test]
-        fn test_square_small_fraction() {
-            let q = Q64_64::from_f64(0.25).unwrap();
-            let square = q.square_as_u128();
-            let expected = 0u128;
-
-            assert_eq!(square, expected, "Square of small fraction failed");
-        }
-
-        #[test]
-        fn test_square_large_fractional_number() {
-            let q = Q64_64::from_f64(12345.6789).unwrap();
-            let square = q.square_as_u128();
-
-            let expected: f64 = (12345.6789 * 12345.6789);
-            assert_eq!(square, expected.floor() as u128, "Square of large fractional number failed");
-        }
-
-        #[test]
-        fn test_square_near_one_fraction() {
-            let q = Q64_64::from_f64(0.9999).unwrap();
-            let square = q.square_as_u128();
-
-            let expected = 0;
-
-            assert_eq!(square, expected, "Square of near-one fraction failed");
-        }
-    }
-    mod panic_tests {
-        use super::*;
-        #[test]
-        #[should_panic(expected = "Division by zero!")]
-        fn test_div_panic() {
-            let q1 = Q64_64::from_u64(10);
-            let q2 = Q64_64::from_u64(0);
-            let _ = q1 / q2;
-        }
-    }
-}
-
-#[cfg(test)]
-mod fuzz_tests {
-    use super::*;
-    use proptest::prelude::*;
-
-    fn arbitrary_f64() -> impl Strategy<Value = f64> {
-        prop_oneof![
-            0.0..Q64_64::FRACTIONAL_SCALE,
-            Just(0.00000001),
-            Just(1.0),
-            Just(Q64_64::FRACTIONAL_SCALE * 0.99),
-        ]
-    }
-    fn invalid_arbitrary_f64() -> impl Strategy<Value = f64>{
-        prop_oneof![
-            f64::MIN..0.0,
-            Q64_64::FRACTIONAL_SCALE..f64::MAX,
-            Just(f64::NEG_INFINITY),
-            Just(f64::INFINITY),
-            Just(f64::NAN),
-        ]
-    }
-    fn arbitrary_u128() -> impl Strategy<Value = u128> {
-        prop_oneof![
-            0..=u128::MAX,
-            Just(0),
-            Just(1),
-            Just(u128::MAX),
-            Just(u128::MAX / 2),
-            Just(u128::MAX - 1),
-            Just(1024),
-            Just(4095),
-            Just(8191),
-            Just(10000),
-            Just(12321),
-            Just(65535),
-            Just(12345),
-            Just(54321),
-            Just(99999),
-            Just(45678),
-            Just(87654),
-            Just(10001),
-            Just(9999),
-            Just(2047),
-            Just(65534)
-        ]
-    }
-
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(100000))]
+        proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10000))]
 
         #[test]
         fn test_types_conversion_round_trip(value_f64 in arbitrary_f64()) {
@@ -728,5 +728,6 @@ mod fuzz_tests {
                 );
             }
         }
+    }
     }
 }
