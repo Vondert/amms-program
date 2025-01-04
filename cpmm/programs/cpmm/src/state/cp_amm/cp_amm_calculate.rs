@@ -10,7 +10,7 @@ pub(crate) trait CpAmmCalculate {
     const ADJUST_LIQUIDITY_RATIO_TOLERANCE: Q64_64 = Q64_64::new(18446744073710);
     const FEE_MAX_BASIS_POINTS: u128 = 10000;
     fn constant_product_sqrt(&self) -> Q64_64;
-    fn base_quote_ratio_sqrt(&self) -> Q64_64;
+    fn base_quote_ratio(&self) -> Q64_64;
     fn base_liquidity(&self) -> u64;
     fn quote_liquidity(&self) -> u64;
     fn lp_tokens_supply(&self) -> u64;
@@ -43,8 +43,13 @@ pub(crate) trait CpAmmCalculate {
         let liquidity_share = Q64_64::from_u64(lp_tokens).checked_div(Q64_64::from_u64(self.lp_tokens_supply()))?;
         let constant_product_sqrt_share = self.constant_product_sqrt().checked_mul(liquidity_share)?;
 
-        let base_withdraw = constant_product_sqrt_share.checked_mul(self.base_quote_ratio_sqrt())?.to_u64();
-        let quote_withdraw = constant_product_sqrt_share.checked_div(self.base_quote_ratio_sqrt())?.to_u64();
+        // Sqrt liquidity?
+        let base_withdraw_square = constant_product_sqrt_share.checked_square_mul_as_u128(self.base_quote_ratio())?;
+        let quote_withdraw_square = constant_product_sqrt_share.checked_square_div_as_u128(self.base_quote_ratio())?;
+        
+        let base_withdraw = Q64_64::sqrt_from_u128(base_withdraw_square).to_u64();
+        let quote_withdraw = Q64_64::sqrt_from_u128(quote_withdraw_square).to_u64();
+        
         if base_withdraw == 0 || quote_withdraw == 0{
             return None;
         }
@@ -65,9 +70,9 @@ pub(crate) trait CpAmmCalculate {
     }
 
     fn validate_and_calculate_liquidity_ratio(&self, new_base_liquidity: u64, new_quote_liquidity: u64) -> Result<Q64_64>{
-        let new_base_quote_ratio_sqrt = Self::calculate_base_quote_ratio_sqrt(new_base_liquidity, new_quote_liquidity).ok_or(ErrorCode::BaseQuoteRatioCalculationFailed)?;
-        let difference = self.base_quote_ratio_sqrt().abs_diff(new_base_quote_ratio_sqrt);
-        let allowed_difference = self.base_quote_ratio_sqrt() * Self::ADJUST_LIQUIDITY_RATIO_TOLERANCE;
+        let new_base_quote_ratio_sqrt = Self::calculate_base_quote_ratio(new_base_liquidity, new_quote_liquidity).ok_or(ErrorCode::BaseQuoteRatioCalculationFailed)?;
+        let difference = self.base_quote_ratio().abs_diff(new_base_quote_ratio_sqrt);
+        let allowed_difference = self.base_quote_ratio() * Self::ADJUST_LIQUIDITY_RATIO_TOLERANCE;
         require!(difference <= allowed_difference, ErrorCode::LiquidityRatioToleranceExceeded);
         Ok(new_base_quote_ratio_sqrt)
     }
@@ -85,7 +90,7 @@ pub(crate) trait CpAmmCalculate {
         ((swap_amount as u128) * (self.providers_fee_rate_basis_points() as u128) / Self::FEE_MAX_BASIS_POINTS) as u64
     }
     fn calculate_opposite_liquidity(&self, x_liquidity: u64) -> Option<u64>{
-        let opposite_liquidity = self.constant_product_sqrt().checked_div(Q64_64::sqrt_from_u128(x_liquidity as u128))?.square_as_u64();
+        let opposite_liquidity = self.constant_product_sqrt().checked_square_div_as_u64(Q64_64::from_u64(x_liquidity))?;
         if opposite_liquidity == 0 {
             return None;
         }
@@ -97,16 +102,15 @@ pub(crate) trait CpAmmCalculate {
         require!(swap_result.abs_diff(estimated_swap_result) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
         Ok(())
     }
-    fn calculate_base_quote_ratio_sqrt(base_liquidity: u64, quote_liquidity: u64) -> Option<Q64_64>{
+    fn calculate_base_quote_ratio(base_liquidity: u64, quote_liquidity: u64) -> Option<Q64_64>{
         if base_liquidity == 0 || quote_liquidity == 0 {
             return None
         }
-        let ratio = (Q64_64::from_u64(base_liquidity) / (Q64_64::from_u64(quote_liquidity))).raw_value();
-        let ratio_sqrt = Q64_64::sqrt_from_u128(ratio);
-        if ratio_sqrt.is_zero(){
+        let ratio = Q64_64::from_u64(base_liquidity) / Q64_64::from_u64(quote_liquidity);
+        if ratio.is_zero(){
             return None
         }
-        Some(ratio_sqrt)
+        Some(ratio)
     }
     fn calculate_constant_product_sqrt(base_liquidity: u64, quote_liquidity: u64) -> Option<Q64_64>{
         if base_liquidity == 0 || quote_liquidity == 0 {
@@ -120,7 +124,7 @@ pub(crate) trait CpAmmCalculate {
     }
 }
 
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use crate::state::cp_amm::CpAmmCalculate;
     use crate::utils::math::Q64_64;
@@ -129,7 +133,7 @@ mod tests {
         base_liquidity: u64,
         quote_liquidity: u64,
         constant_product_sqrt: Q64_64,
-        base_quote_ratio_sqrt: Q64_64,
+        base_quote_ratio: Q64_64,
         lp_tokens_supply: u64,
         providers_fee_rate_basis_points: u16,
         protocol_fee_rate_basis_points: u16,
@@ -139,8 +143,8 @@ mod tests {
             self.constant_product_sqrt
         }
 
-        fn base_quote_ratio_sqrt(&self) -> Q64_64 {
-            self.base_quote_ratio_sqrt
+        fn base_quote_ratio(&self) -> Q64_64 {
+            self.base_quote_ratio
         }
 
         fn base_liquidity(&self) -> u64 {
@@ -167,16 +171,41 @@ mod tests {
     mod unit_tests {
         use super::*;
         #[test]
-        fn test_calculate_none_base_quote_ratio_sqrt() {
-            let base_liquidity: u64 = 0;
-            let quote_liquidity: u64 = 0;
-            assert!(TestCpAmm::calculate_base_quote_ratio_sqrt(base_liquidity, quote_liquidity).is_none());
+        fn test_calculate_none_base_quote_ratio_extreme() {
+            let liquidity1: u64 = 0;
+            let liquidity2: u64 = 0;
+            let liquidity3: u64 = 1;
+            let liquidity4: u64 = u64::MAX;
+            let result1 = 5.421010862427522e-20;
+            let result2 = 1.8446744073709552e19;
+            assert_eq!(TestCpAmm::calculate_base_quote_ratio(liquidity3, liquidity4).unwrap().to_f64(), result1);
+            assert_eq!(TestCpAmm::calculate_base_quote_ratio(liquidity4, liquidity3).unwrap().to_f64(), result2);
+            assert!(TestCpAmm::calculate_base_quote_ratio(liquidity1, liquidity2).is_none());
         }
         #[test]
         fn test_calculate_base_quote_ratio_sqrt() {
-            let base_liquidity: u64 = 1;
-            let quote_liquidity: u64 = u64::MAX;
-            assert!(TestCpAmm::calculate_base_quote_ratio_sqrt(base_liquidity, quote_liquidity).is_some());
+            let liquidity1: u64 = 250;
+            let liquidity2: u64 = 100;
+            let result1 = 2.5;
+            let result2 = 0.4;
+            assert_eq!(TestCpAmm::calculate_base_quote_ratio(liquidity1, liquidity2).unwrap().to_f64(), result1);
+            assert_eq!(TestCpAmm::calculate_base_quote_ratio(liquidity2, liquidity1).unwrap().to_f64(), result2);
+        }
+        #[test]
+        fn test_calculate_constant_product_sqrt_extreme() {
+            let liquidity1: u64 = 0;
+            let liquidity2: u64 = u64::MAX;
+            let liquidity3: u64 = 1;
+            assert!(TestCpAmm::calculate_constant_product_sqrt(liquidity1, liquidity2).is_none());
+            assert_eq!(TestCpAmm::calculate_constant_product_sqrt(liquidity2, liquidity2).unwrap().raw_value(), (u64::MAX as u128) << 64);
+            assert_eq!(TestCpAmm::calculate_constant_product_sqrt(liquidity3, liquidity3).unwrap().raw_value(), 1 << 64);
+        }
+        #[test]
+        fn test_calculate_constant_product_sqrt() {
+            let liquidity1: u64 = 250;
+            let liquidity2: u64 = 100;
+            let result = ((liquidity1 * liquidity2) as f64).sqrt();
+            assert_eq!(TestCpAmm::calculate_constant_product_sqrt(liquidity1, liquidity2).unwrap().to_f64(), result);
         }
         
     }
@@ -188,6 +217,7 @@ mod tests {
             0..=u128::MAX,
             Just(0),
             Just(1),
+            Just(2),
             Just(u128::MAX),
             Just(u128::MAX / 2),
             Just(u128::MAX - 1),
@@ -209,4 +239,4 @@ mod tests {
             ]
         }
     }
-}*/
+}
