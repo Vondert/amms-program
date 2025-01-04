@@ -7,7 +7,6 @@ use anchor_spl::{
 };
 use anchor_spl::token_2022::spl_token_2022;
 use anchor_spl::token_2022::spl_token_2022::extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensions};
-use crate::utils::math::Q64_64;
 
 const ALLOWED_TOKEN_EXTENSIONS: &[ExtensionType] = &[
     ExtensionType::TransferFeeConfig,
