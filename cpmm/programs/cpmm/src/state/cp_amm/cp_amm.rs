@@ -20,9 +20,9 @@ pub struct CpAmm {
     // Square root of the constant product of the pool
     // Stored as square root in Q64.64 for computation accuracy 
     constant_product_sqrt: Q64_64, // 16
-    // Base and Quote token's ration
-    // Stored as Q64.64 for computation accuracy 
-    base_quote_ratio: Q64_64, // 16
+    // Square root of the Base and Quote token's ration
+    // Stored as square root in Q64.64 for computation accuracy 
+    base_quote_ratio_sqrt: Q64_64, // 16
     
     // Base token amount in pool's vault
     base_liquidity: u64,   // 8
@@ -100,8 +100,8 @@ impl CpAmmCalculate for CpAmm {
         self.constant_product_sqrt
     }
 
-    fn base_quote_ratio(&self) -> Q64_64 {
-        self.base_quote_ratio
+    fn base_quote_ratio_sqrt(&self) -> Q64_64 {
+        self.base_quote_ratio_sqrt
     }
 
     fn base_liquidity(&self) -> u64 {
@@ -141,14 +141,14 @@ impl CpAmm {
 
         let constant_product_sqrt = Self::calculate_constant_product_sqrt(base_liquidity, quote_liquidity).unwrap();
         let (lp_tokens_supply, initial_locked_liquidity) = Self::calculate_launch_lp_tokens(constant_product_sqrt)?;
-        let base_quote_ratio = Self::calculate_base_quote_ratio(base_liquidity, quote_liquidity).unwrap();
+        let base_quote_ratio_sqrt = Self::calculate_base_quote_ratio_sqrt(base_liquidity, quote_liquidity).unwrap();
         
         Ok(LaunchPayload {
             initial_locked_liquidity,
             base_liquidity,
             quote_liquidity,
             constant_product_sqrt,
-            base_quote_ratio,
+            base_quote_ratio_sqrt,
             lp_tokens_supply,
         })
     }
@@ -167,7 +167,7 @@ impl CpAmm {
 
         let new_lp_tokens_supply = self.lp_tokens_supply.checked_add(lp_tokens_to_mint).ok_or(ErrorCode::ProvideOverflowError)?;
         Ok(ProvidePayload {
-            base_quote_ratio: new_base_quote_ratio_sqrt,
+            base_quote_ratio_sqrt: new_base_quote_ratio_sqrt,
             constant_product: new_constant_product_sqrt,
             base_liquidity: new_base_liquidity,
             quote_liquidity: new_quote_liquidity,
@@ -187,10 +187,10 @@ impl CpAmm {
         let new_quote_liquidity = self.quote_liquidity.checked_sub(quote_withdraw).ok_or(ErrorCode::WithdrawOverflowError)?;
 
         // Checks that new base and quote liquidity don't equal zero and amm won't be drained
-        let new_base_quote_ratio = self.validate_and_calculate_liquidity_ratio(new_base_liquidity, new_quote_liquidity)?;
+        let new_base_quote_ratio_sqrt = self.validate_and_calculate_liquidity_ratio(new_base_liquidity, new_quote_liquidity)?;
 
         Ok(WithdrawPayload{
-            base_quote_ratio: new_base_quote_ratio,
+            base_quote_ratio_sqrt: new_base_quote_ratio_sqrt,
             base_liquidity: new_base_liquidity,
             quote_liquidity: new_quote_liquidity,
             lp_tokens_supply: lp_tokens_left_supply,
@@ -286,7 +286,7 @@ impl CpAmm {
         self.initial_locked_liquidity = launch_payload.initial_locked_liquidity;
         self.lp_tokens_supply = launch_payload.lp_tokens_supply;
         self.constant_product_sqrt = launch_payload.constant_product_sqrt;
-        self.base_quote_ratio = launch_payload.base_quote_ratio;
+        self.base_quote_ratio_sqrt = launch_payload.base_quote_ratio_sqrt;
         self.base_vault = base_vault.key();
         self.quote_vault = quote_vault.key();
         self.locked_lp_vault = locked_lp_vault.key();
@@ -296,14 +296,14 @@ impl CpAmm {
         self.quote_liquidity = provide_payload.quote_liquidity;
         self.lp_tokens_supply = provide_payload.lp_tokens_supply;
         self.constant_product_sqrt = provide_payload.constant_product;
-        self.base_quote_ratio = provide_payload.base_quote_ratio;
+        self.base_quote_ratio_sqrt = provide_payload.base_quote_ratio_sqrt;
     }
     pub(crate) fn withdraw(&mut self, withdraw_payload: WithdrawPayload) -> (){
         self.base_liquidity = withdraw_payload.base_liquidity;
         self.quote_liquidity = withdraw_payload.quote_liquidity;
         self.lp_tokens_supply = withdraw_payload.lp_tokens_supply;
         self.constant_product_sqrt = Self::calculate_constant_product_sqrt(self.base_liquidity, self.quote_liquidity).unwrap();
-        self.base_quote_ratio = withdraw_payload.base_quote_ratio;
+        self.base_quote_ratio_sqrt = withdraw_payload.base_quote_ratio_sqrt;
     }
     pub(crate) fn swap(&mut self, swap_payload: SwapPayload) -> () {
         self.base_liquidity = swap_payload.base_liquidity;
@@ -315,7 +315,7 @@ impl CpAmm {
             self.protocol_quote_fees_to_redeem = swap_payload.protocol_fees_to_redeem;
         }
         self.constant_product_sqrt = Self::calculate_constant_product_sqrt(self.base_liquidity, self.quote_liquidity).unwrap();
-        self.base_quote_ratio = Self::calculate_base_quote_ratio(self.base_liquidity, self.quote_liquidity).unwrap();
+        self.base_quote_ratio_sqrt = Self::calculate_base_quote_ratio_sqrt(self.base_liquidity, self.quote_liquidity).unwrap();
     }
 }
 
@@ -323,7 +323,7 @@ impl CpAmm {
 pub struct LaunchPayload {
     initial_locked_liquidity: u64,
     constant_product_sqrt: Q64_64,
-    base_quote_ratio: Q64_64,
+    base_quote_ratio_sqrt: Q64_64,
     base_liquidity: u64,
     quote_liquidity: u64,
     lp_tokens_supply: u64,
@@ -339,7 +339,7 @@ impl LaunchPayload {
 
 #[derive(Debug)]
 pub struct ProvidePayload {
-    base_quote_ratio: Q64_64,
+    base_quote_ratio_sqrt: Q64_64,
     constant_product: Q64_64,
     base_liquidity: u64,
     quote_liquidity: u64,
@@ -354,7 +354,7 @@ impl ProvidePayload {
 
 #[derive(Debug)]
 pub struct WithdrawPayload{
-    base_quote_ratio: Q64_64,
+    base_quote_ratio_sqrt: Q64_64,
     base_liquidity: u64,
     quote_liquidity: u64,
     lp_tokens_supply: u64,

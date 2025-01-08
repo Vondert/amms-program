@@ -1,6 +1,6 @@
-use std::cmp::Ordering;
 use std::ops::{Add, Div, Mul, Sub};
 use anchor_lang::{AnchorDeserialize, AnchorSerialize, prelude::borsh, InitSpace};
+use super::U256;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct Q64_64 {
@@ -11,7 +11,6 @@ impl Q64_64 {
     pub const FRACTIONAL_BITS: u32 = 64;
     pub const FRACTIONAL_MASK: u128 = (1u128 << Self::FRACTIONAL_BITS) - 1;
     pub const FRACTIONAL_SCALE: f64 = 18446744073709551616.0;
-    //pub const FRACTIONAL_SCALE: f64 = 1.8446744073709552e19;
     pub const MAX: Self = Q64_64::new(u128::MAX);
     pub const ONE: Self = Q64_64::from_u128(1u128);
     pub const fn new(value: u128) -> Self {
@@ -97,155 +96,69 @@ impl Q64_64{
         if rhs.value == 0 {
             return None;
         }
-        let result = ((U256::from(self.value) << Q64_64::FRACTIONAL_BITS) / U256::from(rhs.value)).checked_as_u128();
-        result.map(|res| Self { value: res })
+        let result = (U256::from(self.value) << Self::FRACTIONAL_BITS) / U256::from(rhs.value);
+        result.checked_as_u128().map(|res| Self { value: res })
     }
 }
 impl Q64_64{
-    fn square(self) -> U256 {
+    fn square_as_u256(self) -> U256 {
         if self.is_zero() {
             return U256::zero();
         }
         if self.is_one() {
             return U256::from(1u128);
         }
-        (U256::from(self.value) * U256::from(self.value)) >> (Self::FRACTIONAL_BITS * 2)
+        U256::from(self.value) * U256::from(self.value)
     }
-
     pub fn square_as_u128(self) -> u128 {
-        self.square().as_u128()
+        let square_as_u256 = self.square_as_u256();
+        if square_as_u256 == U256::one() || self.is_zero(){
+            return square_as_u256.as_u128();
+        }
+        square_as_u256.q128_128_to_u128_round()
     }
 
     pub fn checked_square_as_u64(self) -> Option<u64> {
-        self.square().checked_as_u64()
+        let square_as_u256 = self.square_as_u256();
+        if square_as_u256 == U256::one() || self.is_zero(){
+            return Some(square_as_u256.as_u64());
+        }
+        square_as_u256.checked_q128_128_to_u64_round()
     }
-
+    pub fn square_as_q64_64(self) -> Self {
+        if self.is_zero() || self.is_one(){
+            return self;
+        }
+        let square_as_u256 = self.square_as_u256() << Self::FRACTIONAL_BITS;
+        Q64_64::new(square_as_u256.q128_128_to_u128_round())
+    }
     pub fn square_as_u64(self) -> u64 {
-        self.square().as_u64()
+        self.checked_square_as_u64().unwrap()
     }
-    fn square_mul(self, rhs: Q64_64) -> U256{
-        (self.square() * U256::from(rhs.value)) >> Self::FRACTIONAL_BITS
-    }
-    pub fn checked_square_mul_as_u64(self, rhs: Q64_64) -> Option<u64> {
-        self.square_mul(rhs).checked_as_u64()
-    }
-    pub fn checked_square_mul_as_u128(self, rhs: Q64_64) -> Option<u128> {
-        self.square_mul(rhs).checked_as_u128()
-    }
-    fn square_div(self, rhs: Q64_64) -> U256{
-        (self.square() << Self::FRACTIONAL_BITS) / U256::from(rhs.value)
-    }
-    pub fn checked_square_div_as_u64(self, rhs: Q64_64) -> Option<u64> {
-        if rhs.is_zero(){
-            return None;
-        }
-        self.square_div(rhs).checked_as_u64()
-    }
-    pub fn checked_square_div_as_u128(self, rhs: Q64_64) -> Option<u128> {
-        if rhs.is_zero(){
-            return None;
-        }
-        self.square_div(rhs).checked_as_u128()
-    }
-    
     pub fn sqrt_from_u128(value: u128) -> Self {
-        if value == 0{
-            return Q64_64::from_u128(0);
+        let scaled_value = U256::from(value) << (2 * Self::FRACTIONAL_BITS);
+        Self{
+            value: scaled_value.sqrt().as_u128()
         }
-        if value == 1{
-            return Q64_64::from_u128(1);
-        }
-        if value == u128::MAX{
-            return Q64_64::from_u64(u64::MAX);
-        }
-
-        //let mut low = U256::from(value >> 1);
-        let mut low = U256::from(0);
-        {
-            let scaled_value = U256::from(value) << Self::FRACTIONAL_BITS;
-            let mut high = scaled_value;
-            let mut mid;
-
-            let tolerance = U256::from(1u128);
-            while high - low > tolerance {
-                mid = (low + high) >> 1;
-
-                let square = (mid.saturating_mul(mid)) >> Self::FRACTIONAL_BITS;
-                if square <= scaled_value {
-                    low = mid;
-                } else {
-                    high = mid;
-                }
-            }
-        }
-
-        Self::approximate_sqrt(Q64_64::new(low.as_u128()), value)
-        //Self::approximate_sqrt_fraction(approximated_sqrt, value)
     }
-
-    fn approximate_sqrt(mut sqrt: Q64_64, value: u128) -> Q64_64 {
-        let mut approximation = 512u128;
-        while approximation >= 1{
-            let square = sqrt.square_as_u128();
-            match square.cmp(&value){
-                Ordering::Less => {
-                    sqrt.value += approximation;
-                },
-                Ordering::Equal => {
-                    break;
-                },
-                Ordering::Greater => {
-                    sqrt.value -= approximation;
-                }
-            }
-            approximation >>= 1;
+    pub fn sqrt(self) -> Self {
+        let scaled_value = U256::from(self.value) << Self::FRACTIONAL_BITS;
+        Self{
+            value: scaled_value.sqrt().as_u128()
         }
-        sqrt
     }
-/*    fn approximate_sqrt_fraction(mut sqrt : Q64_64, value: u128) -> Q64_64 {
-        let max_approximation_bits: u32 = 8;
-        {
-            let square = sqrt.square();
-            let fractional_part_zero_bits_count = 256 - ((square & ((U256::from(1) << 128) - 1)) >> (128 - max_approximation_bits)).leading_zeros();
-            if fractional_part_zero_bits_count == max_approximation_bits{
-                println!(" {}", max_approximation_bits);
-                return sqrt;
-            }
+    pub fn div_sqrt(q1: Self, q2: Self) -> Option<Self> {
+        if q2.raw_value() == 0{
+            return None;
         }
-
-        let mut approximated_sqrt = sqrt;
-        let mut max_zero_bits_count = 0;
-
-        let mut adjustment_low = U256::from(approximated_sqrt.value.saturating_sub(4));
-        let mut adjustment_high = U256::from(approximated_sqrt.value);
-
-        let tolerance = U256::from(1u128);
-        while adjustment_high - adjustment_low > tolerance {
-            let mid = (adjustment_low + adjustment_high) >> 1;
-            approximated_sqrt.value = mid.as_u128();
-
-            let square = approximated_sqrt.square();
-            if square.as_u128() != value{
-                println!("{} {}", square.as_u128(), value);
-                break;
-            }
-            let fractional_part_zero_bits_count = 256 - ((square & ((U256::from(1) << 128) - 1)) >> (128 - max_approximation_bits)).leading_zeros();
-            if fractional_part_zero_bits_count == max_approximation_bits{
-                sqrt.value = mid.as_u128();
-                max_zero_bits_count = max_approximation_bits;
-                break;
-            }
-            else if fractional_part_zero_bits_count >= max_zero_bits_count {
-                adjustment_high = mid;
-                max_zero_bits_count = fractional_part_zero_bits_count;
-                sqrt.value = mid.as_u128();
-            } else {
-                adjustment_low = mid + 1;
-            }
+        else if q1.raw_value() == q2.raw_value(){
+            return Some(Q64_64::ONE)
         }
-        println!("{}", max_zero_bits_count);
-        sqrt
-    }*/
+        let result = ((U256::from(q1.raw_value()) << (2 * Self::FRACTIONAL_BITS)) / U256::from(q2.raw_value())).sqrt();
+        Some(Self{
+            value: result.as_u128()
+        })
+    }
 }
 impl Add for Q64_64 {
     type Output = Self;
@@ -283,26 +196,6 @@ impl Div for Q64_64 {
         Self {
             value: result.as_u128(),
         }
-    }
-}
-
-use uint::construct_uint;
-
-construct_uint! {
-	struct U256(4);
-}
-impl U256 {
-    pub fn checked_as_u128(&self) -> Option<u128> {
-        if self.leading_zeros() < 128{
-            return None;
-        }
-        Some(self.as_u128())
-    }
-    pub fn checked_as_u64(&self) -> Option<u64> {
-        if self.leading_zeros() < 192{
-            return None;
-        }
-        Some(self.as_u64())
     }
 }
 
@@ -619,10 +512,36 @@ mod tests {
                 Just(10001),
                 Just(9999),
                 Just(2047),
-                Just(65534)
+                Just(65534),
+                Just(9756157671691129856 << 64),
+                Just(18446744073709551615 << 64),
             ]
         }
-
+        fn arbitrary_u64() -> impl Strategy<Value = u64> {
+            prop_oneof![
+            Just(0),
+            Just(1),
+            Just(2),
+            Just(u64::MAX),
+            Just(u64::MAX / 2),
+            Just(u64::MAX - 1),
+            Just(1024),
+            Just(4095),
+            Just(8191),
+            Just(10000),
+            Just(12321),
+            Just(65535),
+            Just(12345),
+            Just(54321),
+            Just(99999),
+            Just(45678),
+            Just(87654),
+            Just(10001),
+            Just(9999),
+            Just(2047),
+            Just(65534)
+            ]
+        }
         proptest! {
             #![proptest_config(ProptestConfig::with_cases(10000))]
             
@@ -655,11 +574,11 @@ mod tests {
             }
             
             #[test]
-            fn test_sqrt_and_square_round_trip(value in arbitrary_u128()) {
+            fn test_u128_sqrt_and_square_round_trip(value in arbitrary_u128()) {
                 let sqrt = Q64_64::sqrt_from_u128(value);
                 let square_u128 = sqrt.square_as_u128();
                 let square_option_u64 = sqrt.checked_square_as_u64();
-                let tolerance = value / 1_000_000_000_000;
+                let tolerance = 2 >> (value.leading_zeros().max(3) - 3);
                 prop_assert!(square_u128.abs_diff(value) <= tolerance, "Invalid square u128 {} from sqrt {} for: {}", square_u128, sqrt.to_f64(), value);
                     
                 if value >> 64 != 0{
@@ -671,8 +590,57 @@ mod tests {
                     prop_assert!(square_u64.abs_diff(value_u64) <= tolerance as u64, "Invalid square u64 {} from sqrt {} for: {}", square_u64, sqrt.to_f64(), value_u64);
                 }
             }
-            
             #[test]
+            fn test_q64_64_sqrt_and_square_round_trip(value in arbitrary_u128()) {
+                let q6464 = Q64_64::new(value);
+                let sqrt = q6464.sqrt();
+                let square = sqrt.square_as_q64_64();
+                println!("\nValue {}", value);
+                println!("Q6464 {}", q6464.to_f64());
+                println!("Sqrt {}", sqrt.raw_value());
+                println!("Sqrt f64 {}", sqrt.to_f64());
+                println!("Square {}", square.raw_value());
+                println!("Square f64 {}", square.to_f64());
+                let diff = square.abs_diff(q6464);
+                println!("Diff {} {}", diff.raw_value(), diff.to_f64());
+                prop_assert!(diff.to_f64() <= 1e-9, "Invalid square Q6464 {} from sqrt {} for: {}", square.raw_value(), sqrt.to_f64(), value);
+            }
+            #[test]
+            fn test_q64_64_div_sqrt_and_square_round_trip(value1 in arbitrary_u128(), value2 in arbitrary_u128()) {
+                let q6464_value1 = Q64_64::new(value1);
+                let q6464_value2 = Q64_64::new(value2);
+                let div_sqrt_optional = Q64_64::div_sqrt(q6464_value1, q6464_value2);
+
+                println!("\nValues {} {}", value1, value2);
+                if value2 != 0 {
+                    let div_sqrt = div_sqrt_optional.unwrap();
+                    println!("Div sqrt raw value{}", div_sqrt.raw_value());
+                    println!("Div sqrt f64 {}", div_sqrt.to_f64());
+                    if q6464_value1.value.leading_zeros() + q6464_value2.value.leading_zeros() <= Q64_64::FRACTIONAL_BITS {
+                        let checked_div_square = q6464_value1.checked_div(q6464_value2).unwrap();
+                        let square = div_sqrt.square_as_q64_64();
+                        println!("Square from div square raw value {}", square.raw_value());
+                        println!("Square from div square f64 {}", square.to_f64());
+                        println!("Checked div square f64 {}", checked_div_square.to_f64());
+                        let diff = (square.to_f64() - checked_div_square.to_f64()).abs();
+                        println!("Difference {}", diff);
+                        prop_assert!(diff <= 1e-9, "Invalid square Q6464 {} from sqrt {} for: {}", square.raw_value(), div_sqrt.to_f64(), checked_div_square.to_f64());
+                    }
+                    else{
+                        let float = (value1 as f64 / value2 as f64);
+                        println!("Square f64 {}", float);
+                        let diff = (div_sqrt.to_f64() - float.sqrt()).abs();
+                        println!("Difference {}", diff);
+                        prop_assert!(diff <= 2048.0, "Invalid square sqrt {}; {} for: {}", div_sqrt.to_f64(), float.sqrt(), float);
+                    }
+
+                }
+                else{
+                    prop_assert!(div_sqrt_optional.is_none());
+                }
+
+            }
+  /*          #[test]
             fn test_square_mul_and_div(value in arbitrary_u128(), factor in arbitrary_u128()) {
                 let sqrt = Q64_64::sqrt_from_u128(value);
 
@@ -710,7 +678,7 @@ mod tests {
                 else{
                     prop_assert!(square_div_u128.unwrap() != 0, "Square div some for square {} and factor {}. But it is {}", square_u128, factor, square_div_u128.unwrap());
                 }
-            }
+            }*/
             
             #[test]
             fn test_abs_diff(value1 in arbitrary_u128(), value2 in arbitrary_u128()) {
