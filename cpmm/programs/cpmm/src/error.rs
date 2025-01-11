@@ -12,6 +12,12 @@ pub enum ErrorCode {
 
     #[msg("Base liquidity is zero.")]
     BaseLiquidityIsZero,
+    
+    #[msg("Quote liquidity is less then minimal operable liquidity.")]
+    InsufficientQuoteLiquidity,
+
+    #[msg("Base liquidity is less then minimal operable liquidity.")]
+    InsufficientBaseLiquidity,
 
     #[msg("Liquidity tokens supply is zero.")]
     LpTokensSupplyIsZero,

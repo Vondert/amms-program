@@ -17,9 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up working directory
-      run: cd cpmm/programs/cpmm
-
     - name: Run tests
-      run: cd cpmm/programs/cpmm && cargo test --verbose
+      working-directory: cpmm/programs/cpmm
+      run: cargo test --verbose
 

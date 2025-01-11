@@ -1,5 +1,4 @@
-mod q64_64;
-mod u256;
-
-pub use q64_64::*;
-use u256::*;
+mod uint_types;
+mod q64_128;
+pub use q64_128::*;
+use uint_types::*;

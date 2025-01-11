@@ -10,3 +10,4 @@ cpmm/yarn.lock
 cpmm/Cargo.lock
 /cpmm/.idea/
 .idea
+/cpmm/programs/cpmm/proptest-regressions/

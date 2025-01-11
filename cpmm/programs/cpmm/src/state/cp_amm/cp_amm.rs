@@ -2,7 +2,7 @@ use anchor_lang::{account, InitSpace};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, TokenAccount};
 use anchor_spl::token_interface;
-use crate::utils::math::Q64_64;
+use crate::utils::math::Q64_128;
 use crate::error::ErrorCode;
 use crate::state::AmmsConfig;
 use super::CpAmmCalculate;
@@ -19,10 +19,10 @@ pub struct CpAmm {
     
     // Square root of the constant product of the pool
     // Stored as square root in Q64.64 for computation accuracy 
-    constant_product_sqrt: Q64_64, // 16
+    constant_product_sqrt: Q64_128, // 16
     // Square root of the Base and Quote token's ration
     // Stored as square root in Q64.64 for computation accuracy 
-    base_quote_ratio_sqrt: Q64_64, // 16
+    base_quote_ratio_sqrt: Q64_128, // 16
     
     // Base token amount in pool's vault
     base_liquidity: u64,   // 8
@@ -96,11 +96,11 @@ impl CpAmm {
     }
 }
 impl CpAmmCalculate for CpAmm {
-    fn constant_product_sqrt(&self) -> Q64_64 {
+    fn constant_product_sqrt(&self) -> Q64_128 {
         self.constant_product_sqrt
     }
 
-    fn base_quote_ratio_sqrt(&self) -> Q64_64 {
+    fn base_quote_ratio_sqrt(&self) -> Q64_128 {
         self.base_quote_ratio_sqrt
     }
 
@@ -126,18 +126,26 @@ impl CpAmmCalculate for CpAmm {
 }
 
 impl CpAmm {
-    fn check_state(&self) -> Result<()>{
+    fn check_state(&self) -> Result<()> {
         require!(self.is_launched, ErrorCode::CpAmmNotLaunched);
-        require!(self.quote_liquidity > 0, ErrorCode::QuoteLiquidityIsZero);
-        require!(self.base_liquidity > 0, ErrorCode::BaseLiquidityIsZero);
+        require!(self.quote_liquidity > Self::MIN_LIQUIDITY, ErrorCode::InsufficientQuoteLiquidity);
+        require!(self.base_liquidity > Self::MIN_LIQUIDITY, ErrorCode::InsufficientBaseLiquidity);
+        require!(self.lp_tokens_supply > 0, ErrorCode::LpTokensSupplyIsZero);
+        Ok(())
+    }
+
+    fn check_state_for_withdraw(&self) -> Result<()> {
+        require!(self.is_launched, ErrorCode::CpAmmNotLaunched);
+        require!(self.quote_liquidity > 0, ErrorCode::BaseLiquidityIsZero);
+        require!(self.base_liquidity > 0, ErrorCode::QuoteLiquidityIsZero);
         require!(self.lp_tokens_supply > 0, ErrorCode::LpTokensSupplyIsZero);
         Ok(())
     }
     pub fn get_launch_payload(&self, base_liquidity: u64, quote_liquidity: u64) -> Result<LaunchPayload> {
         require!(!self.is_launched, ErrorCode::CpAmmAlreadyLaunched);
         require!(self.is_initialized, ErrorCode::CpAmmNotInitialized);
-        require!(base_liquidity > 0, ErrorCode::ProvidedBaseLiquidityIsZero);
-        require!(quote_liquidity > 0, ErrorCode::ProvidedQuoteLiquidityIsZero);
+        require!(base_liquidity > (Self::MIN_LIQUIDITY * 2), ErrorCode::ProvidedBaseLiquidityIsZero);
+        require!(quote_liquidity > (Self::MIN_LIQUIDITY * 2), ErrorCode::ProvidedQuoteLiquidityIsZero);
 
         let constant_product_sqrt = Self::calculate_constant_product_sqrt(base_liquidity, quote_liquidity).unwrap();
         let (lp_tokens_supply, initial_locked_liquidity) = Self::calculate_launch_lp_tokens(constant_product_sqrt)?;
@@ -176,7 +184,7 @@ impl CpAmm {
         })
     }
     pub fn get_withdraw_payload(&self, lp_tokens: u64) -> Result<WithdrawPayload> {
-        self.check_state()?;
+        self.check_state_for_withdraw()?;
         require!(lp_tokens > 0, ErrorCode::ProvidedLpTokensIsZero);
 
         let lp_tokens_left_supply = self.lp_tokens_supply.checked_sub(lp_tokens).ok_or(ErrorCode::WithdrawOverflowError)?;
@@ -322,8 +330,8 @@ impl CpAmm {
 #[derive(Debug)]
 pub struct LaunchPayload {
     initial_locked_liquidity: u64,
-    constant_product_sqrt: Q64_64,
-    base_quote_ratio_sqrt: Q64_64,
+    constant_product_sqrt: Q64_128,
+    base_quote_ratio_sqrt: Q64_128,
     base_liquidity: u64,
     quote_liquidity: u64,
     lp_tokens_supply: u64,
@@ -339,8 +347,8 @@ impl LaunchPayload {
 
 #[derive(Debug)]
 pub struct ProvidePayload {
-    base_quote_ratio_sqrt: Q64_64,
-    constant_product: Q64_64,
+    base_quote_ratio_sqrt: Q64_128,
+    constant_product: Q64_128,
     base_liquidity: u64,
     quote_liquidity: u64,
     lp_tokens_supply: u64,
@@ -354,7 +362,7 @@ impl ProvidePayload {
 
 #[derive(Debug)]
 pub struct WithdrawPayload{
-    base_quote_ratio_sqrt: Q64_64,
+    base_quote_ratio_sqrt: Q64_128,
     base_liquidity: u64,
     quote_liquidity: u64,
     lp_tokens_supply: u64,
