@@ -27,6 +27,9 @@ impl Q64_128 {
 	/// The bitmask used to extract fractional bits.
 	const FRACTIONAL_MASK: U192 = U192([u64::MAX, u64::MAX, 0]);
 
+	/// The minimal fraction required for rounding.
+	const ROUND_FRACTION: U192 = U192([0, 18446744073709551360, 0]);
+
 	/// The scaling factor used for converting floating-point values to fixed-point.
 	#[cfg(test)]
 	const FRACTIONAL_SCALE: f64 = 340282366920938463463374607431768211456.0;
@@ -84,7 +87,21 @@ impl Q64_128 {
 	pub fn as_u64(&self) -> u64 {
 		(self.value >> Self::FRACTIONAL_BITS).as_u64()
 	}
-
+	
+	/// Converts the fixed-point value to a 64-bit unsigned integer with rounding.
+	///
+	/// This method extracts the integer part of the fixed-point value stored in the `value` field
+	/// and rounds it up if the fractional part meets or exceeds the rounding threshold.
+	///
+	/// # Returns
+	/// - A `u64` representing the rounded integer value of the fixed-point number.
+	pub fn as_u64_round(&self) -> u64 {
+		let mut integer = (self.value >> Self::FRACTIONAL_BITS).as_u64();
+		if integer < u64::MAX && (self.value & Self::FRACTIONAL_MASK >= Self::ROUND_FRACTION){
+			integer += 1;
+		}
+		integer
+	}
 	/// Splits the fixed-point value into its integer and fractional components.
 	///
 	/// # Returns

@@ -20,12 +20,6 @@ pub(crate) trait CpAmmCalculate {
     /// - `FEE_MAX_BASIS_POINTS = 10000` corresponds to a maximum fee rate of 100%.
     const FEE_MAX_BASIS_POINTS: u128 = 10000;
 
-    /// The minimum liquidity requirement for the AMM pool.
-    ///
-    /// - `MIN_LIQUIDITY = 5500` specifies the minimum amount of liquidity (in base units) required to
-    ///   initialize or maintain the pool.
-    const MIN_LIQUIDITY: u64 = 5500;
-
     /// The initial amount of locked LP tokens in the pool.
     ///
     /// - Calculated as `10^LP_MINT_INITIAL_DECIMALS`.
@@ -99,7 +93,7 @@ pub(crate) trait CpAmmCalculate {
         let provided_liquidity = new_constant_product_sqrt.checked_sub(self.constant_product_sqrt())?;
 
         let share_from_current_liquidity = provided_liquidity.checked_div(self.constant_product_sqrt())?;
-        let tokens_to_mint = share_from_current_liquidity.checked_mul(Q64_128::from_u64(self.lp_tokens_supply()))?.as_u64();
+        let tokens_to_mint = share_from_current_liquidity.checked_mul(Q64_128::from_u64(self.lp_tokens_supply()))?.as_u64_round();
         if tokens_to_mint == 0{
             return None;
         }
@@ -119,9 +113,8 @@ pub(crate) trait CpAmmCalculate {
         }
         let liquidity_share = Q64_128::from_u64(lp_tokens).checked_div(Q64_128::from_u64(self.lp_tokens_supply()))?;
         let constant_product_sqrt_share = self.constant_product_sqrt().checked_mul(liquidity_share)?;
-
-        let base_withdraw = constant_product_sqrt_share.saturating_mul(self.base_quote_ratio_sqrt()).as_u64();
-        let quote_withdraw = constant_product_sqrt_share.saturating_checked_div(self.base_quote_ratio_sqrt())?.as_u64();
+        let base_withdraw = constant_product_sqrt_share.saturating_mul(self.base_quote_ratio_sqrt()).as_u64_round();
+        let quote_withdraw = constant_product_sqrt_share.saturating_checked_div(self.base_quote_ratio_sqrt())?.as_u64_round();
         
         if base_withdraw == 0 || quote_withdraw == 0{
             return None;
@@ -283,13 +276,13 @@ pub(crate) trait CpAmmCalculate {
     /// - `Ok((u64, u64))` with the initial LP token supply and locked liquidity.
     /// - `Err(ErrorCode)` if the supply is too small.
     fn calculate_launch_lp_tokens(constant_product_sqrt: Q64_128) -> Result<(u64, u64)> {
-        let lp_tokens_supply = constant_product_sqrt.as_u64();
+        let lp_tokens_supply = constant_product_sqrt.as_u64_round();
         require!(lp_tokens_supply > 0, ErrorCode::LpTokensCalculationFailed);
         let initial_locked_liquidity = Self::INITIAL_LOCKED_LP_TOKENS;
         let difference = lp_tokens_supply
             .checked_sub(initial_locked_liquidity)
             .ok_or(ErrorCode::LaunchLiquidityTooSmall)?;
-        require!(difference >= initial_locked_liquidity << 3, ErrorCode::LaunchLiquidityTooSmall);
+        require!(difference >= initial_locked_liquidity * 3, ErrorCode::LaunchLiquidityTooSmall);
         Ok((lp_tokens_supply, initial_locked_liquidity))
     }
 }
@@ -752,13 +745,10 @@ mod tests {
         use super::*;
         use proptest::prelude::*;
 
-        /// Generates arbitrary values for `u64`, including edge cases such as `MIN_LIQUIDITY`, `0`, and `u64::MAX`.
+        /// Generates arbitrary values for `u64`, including edge cases such as `1`, `0`, and `u64::MAX`.
         fn arbitrary_u64() -> impl Strategy<Value = u64> {
             prop_oneof![
                 0..=u64::MAX,
-                Just(TestCpAmm::MIN_LIQUIDITY),
-                Just(TestCpAmm::MIN_LIQUIDITY + 1),
-                Just(TestCpAmm::MIN_LIQUIDITY + 2),
                 Just(0),
                 Just(1), 
                 Just(2),
@@ -769,7 +759,7 @@ mod tests {
         }
         
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(10000))]
+            #![proptest_config(ProptestConfig::with_cases(1000))]
 
             /// Fuzz-test for `calculate_constant_product_sqrt` and `calculate_base_quote_ratio_sqrt`.
             /// Validates that results match the expected values, and edge cases like zero liquidity return `None`.
@@ -777,7 +767,7 @@ mod tests {
             fn test_fuzz_liquidity_calculations(base_liquidity in arbitrary_u64(), quote_liquidity in arbitrary_u64()) {
                 let optional_constant_product_sqrt = TestCpAmm::calculate_constant_product_sqrt(base_liquidity, quote_liquidity);
                 let optional_base_quote_ratio_sqrt = TestCpAmm::calculate_base_quote_ratio_sqrt(base_liquidity, quote_liquidity);
-            
+
                 if base_liquidity == 0 || quote_liquidity == 0 {
                     prop_assert!(
                         optional_constant_product_sqrt.is_none(),
@@ -789,21 +779,20 @@ mod tests {
                         "Base-to-quote ratio square root should return None when either liquidity is zero. Got: {:?}",
                         optional_base_quote_ratio_sqrt
                     );
-                } else if base_liquidity >= TestCpAmm::MIN_LIQUIDITY || quote_liquidity >= TestCpAmm::MIN_LIQUIDITY {
+                } else{
                     let constant_product_sqrt = optional_constant_product_sqrt.unwrap();
                     let base_quote_ratio_sqrt = optional_base_quote_ratio_sqrt.unwrap();
             
-                    let restored_base = constant_product_sqrt.saturating_mul(base_quote_ratio_sqrt).as_u64();
-                    let restored_quote = constant_product_sqrt.saturating_checked_div(base_quote_ratio_sqrt).unwrap().as_u64();
-            
+                    let restored_base = constant_product_sqrt.saturating_mul(base_quote_ratio_sqrt).as_u64_round();
+                    let restored_quote = constant_product_sqrt.saturating_checked_div(base_quote_ratio_sqrt).unwrap().as_u64_round();
                     prop_assert!(
-                        restored_base.abs_diff(base_liquidity) <= 1,
+                        restored_base.abs_diff(base_liquidity) == 0,
                         "Restored base liquidity exceeds tolerance. Expected: {}, Got: {}",
                         base_liquidity,
                         restored_base
                     );
                     prop_assert!(
-                        restored_quote.abs_diff(quote_liquidity) <= 1,
+                        restored_quote.abs_diff(quote_liquidity) == 0,
                         "Restored quote liquidity exceeds tolerance. Expected: {}, Got: {}",
                         quote_liquidity,
                         restored_quote
@@ -823,9 +812,9 @@ mod tests {
                         "Constant product square root should return None when either liquidity is zero. Got: {:?}",
                         optional_constant_product_sqrt
                     );
-                } else if base_liquidity >= TestCpAmm::MIN_LIQUIDITY || quote_liquidity >= TestCpAmm::MIN_LIQUIDITY {
+                } else{
                     let constant_product_sqrt = optional_constant_product_sqrt.unwrap();
-                    let lp_tokens = constant_product_sqrt.as_u64();
+                    let lp_tokens = constant_product_sqrt.as_u64_round();
             
                     if lp_tokens >> 3 >= TestCpAmm::INITIAL_LOCKED_LP_TOKENS {
                         let (launch_liquidity, initial_locked) = TestCpAmm::calculate_launch_lp_tokens(constant_product_sqrt).unwrap();

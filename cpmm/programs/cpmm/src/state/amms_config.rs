@@ -7,7 +7,7 @@ pub struct AmmsConfig {
     pub bump: u8,   // 1
     // Id of the config in AmmsConfigsManagers's configs collection
     pub id: u64,    // 8
-    // Authority that will collect fees from pool
+    // Authority that will collect fees from pools
     pub fee_authority: Pubkey,  // 32
     // Providers fee rate in basis points (1 = 0.01%)
     pub providers_fee_rate_basis_points: u16, // 2
