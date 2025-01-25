@@ -7,125 +7,210 @@ use crate::error::ErrorCode;
 use crate::state::AmmsConfig;
 use super::CpAmmCalculate;
 
+/// Represents a Constant Product Automated Market Maker (AMM) pool.
+///
+/// The `CpAmm` struct encapsulates all the key parameters and state of the pool,
+/// including liquidity, fees, tokens, and associated vaults.
+///
+/// The AMM maintains the constant product invariant, which ensures that
+/// the product of the pool's base and quote liquidity remains constant during swaps.
 #[account]
 #[derive(InitSpace)]
 pub struct CpAmm {
-    is_initialized: bool, // 1
-    is_launched: bool, // 1
-    
-    // Liquidity that will be locked forever after pool launch
-    // Used for stabilizing pool if empty
-    initial_locked_liquidity: u64, // 8
-    
-    // Square root of the constant product of the pool
-    // Stored as square root in Q64.64 for computation accuracy 
-    constant_product_sqrt: Q64_128, // 16
-    // Square root of the Base and Quote token's ration
-    // Stored as square root in Q64.64 for computation accuracy 
-    base_quote_ratio_sqrt: Q64_128, // 16
-    
-    // Base token amount in pool's vault
-    base_liquidity: u64,   // 8
-    // Quote token amount in pool's vault
-    quote_liquidity: u64,  // 8
-    // Amount of lp tokens minted to liquidity providers
-    lp_tokens_supply: u64, // 8
-    
-    // Providers fee rate in basis points set by pool creator (1 = 0.01%)
-    providers_fee_rate_basis_points: u16, // 2
-    // Protocol fee from bound AmmsConfig account (1 = 0.01%)
-    protocol_fee_rate_basis_points: u16, // 2
-    
-    // Base token fees to redeem by bound AmmsConfig account's authority 
-    protocol_base_fees_to_redeem: u64,  // 8
-    // Quote token fees to redeem by bound AmmsConfig account's authority 
-    protocol_quote_fees_to_redeem: u64, // 8
-    
-    // Mint of the base token
-    base_mint: Pubkey,  // 32
-    // Mint of the quote token
-    quote_mint: Pubkey, // 32
-    // Mint of the liquidity token
-    lp_mint: Pubkey,    // 32
+    /// Whether the AMM has been initialized.
+    is_initialized: bool, // 1 byte
 
-    // Liquidity vault with base tokens
-    base_vault: Pubkey, // 32
-    // Liquidity vault with quote tokens
-    quote_vault: Pubkey, // 32
-    // Vault with locked liquidity tokens
-    locked_lp_vault: Pubkey, // 32
-    
-    // AmmsConfig account
-    amms_config: Pubkey, // 32
-    // Canonical bump
-    bump: [u8; 1], // 1
+    /// Whether the AMM has been launched and is active.
+    is_launched: bool, // 1 byte
+
+    /// Initial liquidity that is permanently locked after the pool launch.
+    /// This stabilizes the pool in case of empty liquidity.
+    initial_locked_liquidity: u64, // 8 bytes
+
+    /// Square root of the constant product of the pool, stored as a Q64.128 fixed-point number.
+    /// This ensures high accuracy during calculations.
+    constant_product_sqrt: Q64_128, // 16 bytes
+
+    /// Square root of the ratio between the base and quote tokens, stored as a Q64.128 fixed-point number.
+    base_quote_ratio_sqrt: Q64_128, // 16 bytes
+
+    /// Amount of base tokens currently in the pool's vault.
+    base_liquidity: u64, // 8 bytes
+
+    /// Amount of quote tokens currently in the pool's vault.
+    quote_liquidity: u64, // 8 bytes
+
+    /// Total supply of LP tokens minted to liquidity providers.
+    lp_tokens_supply: u64, // 8 bytes
+
+    /// Fee rate for liquidity providers, measured in basis points (1 basis point = 0.01%).
+    providers_fee_rate_basis_points: u16, // 2 bytes
+
+    /// Protocol fee rate from the associated `AmmsConfig` account, measured in basis points (1 = 0.01%).
+    protocol_fee_rate_basis_points: u16, // 2 bytes
+
+    /// Accumulated base token fees that can be redeemed by the `AmmsConfig` account's authority.
+    protocol_base_fees_to_redeem: u64, // 8 bytes
+
+    /// Accumulated quote token fees that can be redeemed by the `AmmsConfig` account's authority.
+    protocol_quote_fees_to_redeem: u64, // 8 bytes
+
+    /// Public key of the base token's mint.
+    base_mint: Pubkey, // 32 bytes
+
+    /// Public key of the quote token's mint.
+    quote_mint: Pubkey, // 32 bytes
+
+    /// Public key of the LP token's mint.
+    lp_mint: Pubkey, // 32 bytes
+
+    /// Public key of the vault holding the base tokens.
+    base_vault: Pubkey, // 32 bytes
+
+    /// Public key of the vault holding the quote tokens.
+    quote_vault: Pubkey, // 32 bytes
+
+    /// Public key of the vault holding locked LP tokens.
+    locked_lp_vault: Pubkey, // 32 bytes
+
+    /// Public key of the associated `AmmsConfig` account.
+    amms_config: Pubkey, // 32 bytes
+
+    /// Canonical bump seed for the account's PDA.
+    bump: [u8; 1], // 1 byte
 }
 
 impl CpAmm {
+    /// Seed used for generating the PDA.
     pub const SEED: &'static [u8] = b"cp_amm";
+
+    /// Returns the seeds for generating the PDA.
+    ///
+    /// The PDA is derived using the `SEED`, the `lp_mint`, and the `bump` value.
     pub fn seeds(&self) -> [&[u8]; 3] {
         [Self::SEED, self.lp_mint.as_ref(), self.bump.as_ref()]
     }
-    pub fn is_initialized(&self) -> bool{
+
+    /// Checks if the AMM has been initialized.
+    pub fn is_initialized(&self) -> bool {
         self.is_initialized
     }
+
+    /// Checks if the AMM has been launched and is active.
     pub fn is_launched(&self) -> bool {
         self.is_launched
     }
+
+    /// Returns the canonical bump value for the PDA.
     pub fn bump(&self) -> u8 {
         self.bump[0]
     }
-    pub fn base_mint(&self) -> &Pubkey{
+
+    /// Returns the public key of the base token's mint.
+    pub fn base_mint(&self) -> &Pubkey {
         &self.base_mint
     }
 
-    pub fn quote_mint(&self) -> &Pubkey{
+    /// Returns the public key of the quote token's mint.
+    pub fn quote_mint(&self) -> &Pubkey {
         &self.quote_mint
     }
-    pub fn lp_mint(&self) -> &Pubkey{
+
+    /// Returns the public key of the LP token's mint.
+    pub fn lp_mint(&self) -> &Pubkey {
         &self.lp_mint
     }
-    pub fn base_vault(&self) -> &Pubkey{
+
+    /// Returns the public key of the vault holding base tokens.
+    pub fn base_vault(&self) -> &Pubkey {
         &self.base_vault
     }
-    pub fn quote_vault(&self) -> &Pubkey{
+
+    /// Returns the public key of the vault holding quote tokens.
+    pub fn quote_vault(&self) -> &Pubkey {
         &self.quote_vault
     }
-    pub fn amms_config(&self) -> &Pubkey{
+
+    /// Returns the public key of the associated `AmmsConfig` account.
+    pub fn amms_config(&self) -> &Pubkey {
         &self.amms_config
     }
 }
+/// Implements the `CpAmmCalculate` trait for the `CpAmm` struct.
+///
+/// This implementation defines core logic and calculations for the constant product AMM,
+/// including methods for computing liquidity ratios, validating swaps, and handling fees.
 impl CpAmmCalculate for CpAmm {
+    /// Retrieves the square root of the constant product of the pool.
+    ///
+    /// # Returns
+    /// - A `Q64_128` value representing the square root of the constant product,
+    ///   used to maintain the AMM's invariant during calculations.
     fn constant_product_sqrt(&self) -> Q64_128 {
         self.constant_product_sqrt
     }
 
+    /// Retrieves the square root of the base-to-quote token liquidity ratio.
+    ///
+    /// # Returns
+    /// - A `Q64_128` value representing the square root of the liquidity ratio
+    ///   between the base and quote tokens in the pool.
     fn base_quote_ratio_sqrt(&self) -> Q64_128 {
         self.base_quote_ratio_sqrt
     }
 
+    /// Retrieves the current amount of base token liquidity in the pool's vault.
+    ///
+    /// # Returns
+    /// - A `u64` value representing the amount of base tokens available in the pool.
     fn base_liquidity(&self) -> u64 {
         self.base_liquidity
     }
 
+    /// Retrieves the current amount of quote token liquidity in the pool's vault.
+    ///
+    /// # Returns
+    /// - A `u64` value representing the amount of quote tokens available in the pool.
     fn quote_liquidity(&self) -> u64 {
         self.quote_liquidity
     }
 
+    /// Retrieves the total supply of LP tokens minted by the pool.
+    ///
+    /// # Returns
+    /// - A `u64` value representing the total number of LP tokens issued.
     fn lp_tokens_supply(&self) -> u64 {
         self.lp_tokens_supply
     }
 
+    /// Retrieves the fee rate for liquidity providers, expressed in basis points.
+    ///
+    /// # Returns
+    /// - A `u16` value representing the provider's fee rate in basis points (1 = 0.01%).
     fn providers_fee_rate_basis_points(&self) -> u16 {
         self.providers_fee_rate_basis_points
     }
 
+    /// Retrieves the protocol fee rate, expressed in basis points.
+    ///
+    /// # Returns
+    /// - A `u16` value representing the protocol's fee rate in basis points (1 = 0.01%).
     fn protocol_fee_rate_basis_points(&self) -> u16 {
         self.protocol_fee_rate_basis_points
     }
 }
 
 impl CpAmm {
+    /// Validates the current state of the AMM to ensure it is ready for operations.
+    ///
+    /// This method ensures that:
+    /// - The AMM has been launched.
+    /// - The pool has non-zero base and quote liquidity.
+    /// - The pool has a positive supply of LP tokens.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the state is valid.
+    /// - `Err(ErrorCode)` if any of the checks fail.
     fn check_state(&self) -> Result<()> {
         require!(self.is_launched, ErrorCode::CpAmmNotLaunched);
         require!(self.quote_liquidity > 0, ErrorCode::BaseLiquidityIsZero);
@@ -133,6 +218,18 @@ impl CpAmm {
         require!(self.lp_tokens_supply > 0, ErrorCode::LpTokensSupplyIsZero);
         Ok(())
     }
+    
+    /// Prepares the payload for launching the AMM with the provided base and quote liquidity.
+    ///
+    /// It calculates the initial constant product, liquidity ratios, and the total supply of LP tokens to mint.
+    ///
+    /// # Parameters
+    /// - `base_liquidity`: The amount of base liquidity to add during the launch.
+    /// - `quote_liquidity`: The amount of quote liquidity to add during the launch.
+    ///
+    /// # Returns
+    /// - `Ok(LaunchPayload)` containing the calculated launch details.
+    /// - `Err(ErrorCode)` if any preconditions fail or calculations encounter errors.
     pub fn get_launch_payload(&self, base_liquidity: u64, quote_liquidity: u64) -> Result<LaunchPayload> {
         require!(!self.is_launched, ErrorCode::CpAmmAlreadyLaunched);
         require!(self.is_initialized, ErrorCode::CpAmmNotInitialized);
@@ -152,6 +249,18 @@ impl CpAmm {
             lp_tokens_supply,
         })
     }
+
+    /// Prepares the payload for adding liquidity to the AMM.
+    ///
+    /// It calculates the new pool state, including updated liquidity, constant product, and the number of LP tokens to mint.
+    ///
+    /// # Parameters
+    /// - `base_liquidity`: The amount of base liquidity to provide.
+    /// - `quote_liquidity`: The amount of quote liquidity to provide.
+    ///
+    /// # Returns
+    /// - `Ok(ProvidePayload)` containing the updated pool state and LP tokens to mint.
+    /// - `Err(ErrorCode)` if any checks fail or calculations encounter errors.
     pub fn get_provide_payload(&self, base_liquidity: u64, quote_liquidity: u64) -> Result<ProvidePayload> {
         self.check_state()?;
         require!(base_liquidity > 0, ErrorCode::ProvidedBaseLiquidityIsZero);
@@ -175,6 +284,17 @@ impl CpAmm {
             lp_tokens_to_mint,
         })
     }
+
+    /// Prepares the payload for withdrawing liquidity from the AMM.
+    ///
+    /// It calculates the amounts of base and quote liquidity to withdraw, ensuring the pool remains valid.
+    ///
+    /// # Parameters
+    /// - `lp_tokens`: The number of LP tokens to redeem for liquidity withdrawal.
+    ///
+    /// # Returns
+    /// - `Ok(WithdrawPayload)` containing the updated pool state and withdrawn liquidity amounts.
+    /// - `Err(ErrorCode)` if any checks fail or calculations encounter errors.
     pub fn get_withdraw_payload(&self, lp_tokens: u64) -> Result<WithdrawPayload> {
         self.check_state()?;
         require!(lp_tokens > 0, ErrorCode::ProvidedLpTokensIsZero);
@@ -185,7 +305,7 @@ impl CpAmm {
         
         let new_base_liquidity = self.base_liquidity.checked_sub(base_withdraw).ok_or(ErrorCode::WithdrawOverflowError)?;
         let new_quote_liquidity = self.quote_liquidity.checked_sub(quote_withdraw).ok_or(ErrorCode::WithdrawOverflowError)?;
-        println!("New base {} New quote {}", new_base_liquidity, new_quote_liquidity);
+
         // Checks that new base and quote liquidity don't equal zero and amm won't be drained
         let new_base_quote_ratio_sqrt = self.validate_and_calculate_liquidity_ratio(new_base_liquidity, new_quote_liquidity)?;
 
@@ -198,6 +318,19 @@ impl CpAmm {
             quote_withdraw_amount: quote_withdraw,
         })
     }
+
+    /// Prepares the payload for swapping a base token amount into a quote token amount.
+    ///
+    /// It calculates the updated pool state, including fees, and validates the constant product invariant.
+    ///
+    /// # Parameters
+    /// - `base_amount`: The amount of base tokens to swap.
+    /// - `estimated_result`: The estimated amount of quote tokens to receive.
+    /// - `allowed_slippage`: The maximum allowable slippage in the swap.
+    ///
+    /// # Returns
+    /// - `Ok(SwapPayload)` containing the updated pool state and swap details.
+    /// - `Err(ErrorCode)` if any checks fail or calculations encounter errors.
     pub fn get_base_to_quote_swap_payload(&self, base_amount: u64, estimated_result: u64, allowed_slippage: u64) -> Result<SwapPayload>{
         self.check_state()?;
         require!(base_amount > 0, ErrorCode::SwapAmountIsZero);
@@ -226,6 +359,19 @@ impl CpAmm {
             true
         ))
     }
+
+    /// Prepares the payload for swapping a quote token amount into a base token amount.
+    ///
+    /// It calculates the updated pool state, including fees, and validates the constant product invariant.
+    ///
+    /// # Parameters
+    /// - `quote_amount`: The amount of quote tokens to swap.
+    /// - `estimated_result`: The estimated amount of base tokens to receive.
+    /// - `allowed_slippage`: The maximum allowable slippage in the swap.
+    ///
+    /// # Returns
+    /// - `Ok(SwapPayload)` containing the updated pool state and swap details.
+    /// - `Err(ErrorCode)` if any checks fail or calculations encounter errors.
     pub fn get_quote_to_base_swap_payload(&self, quote_amount: u64, estimated_result: u64, allowed_slippage: u64) -> Result<SwapPayload>{
         self.check_state()?;
         require!(quote_amount > 0, ErrorCode::SwapAmountIsZero);
@@ -257,6 +403,23 @@ impl CpAmm {
 }
 
 impl CpAmm {
+
+    /// Initializes the AMM with the provided token mints and configuration.
+    ///
+    /// This method sets the initial configuration for the AMM, linking it with
+    /// the provided base, quote, and LP token mints, and a configuration account.
+    /// It also initializes the protocol and provider fee rates and marks the AMM as initialized.
+    ///
+    /// # Parameters
+    /// - `base_mint`: The mint of the base token.
+    /// - `quote_mint`: The mint of the quote token.
+    /// - `lp_mint`: The mint of the LP token.
+    /// - `amms_config`: The configuration account for the AMM.
+    /// - `bump`: The canonical bump seed for the AMM's PDA.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the initialization is successful.
+    /// - `Err(ErrorCode)` if the AMM is already initialized.
     pub fn initialize(
         &mut self,
         base_mint: &InterfaceAccount<token_interface::Mint>,
@@ -280,6 +443,21 @@ impl CpAmm {
 
         Ok(())
     }
+
+    /// Launches the AMM with the provided liquidity and vaults.
+    ///
+    /// This method finalizes the initial setup of the AMM by locking in the provided
+    /// base and quote liquidity, initializing the constant product and liquidity ratios,
+    /// and linking the vault accounts.
+    ///
+    /// # Parameters
+    /// - `launch_payload`: Contains the initial liquidity, LP token supply, and ratios.
+    /// - `base_vault`: The vault holding the base tokens.
+    /// - `quote_vault`: The vault holding the quote tokens.
+    /// - `locked_lp_vault`: The vault holding locked LP tokens.
+    ///
+    /// # Returns
+    /// - No return value. Modifies the internal state of the AMM.
     pub(crate) fn launch(&mut self, launch_payload: LaunchPayload, base_vault: &InterfaceAccount<token_interface::TokenAccount>, quote_vault: &InterfaceAccount<token_interface::TokenAccount>, locked_lp_vault: &Account<TokenAccount>) -> (){
         self.base_liquidity = launch_payload.base_liquidity;
         self.quote_liquidity = launch_payload.quote_liquidity;
@@ -291,6 +469,17 @@ impl CpAmm {
         self.quote_vault = quote_vault.key();
         self.locked_lp_vault = locked_lp_vault.key();
     }
+
+    /// Updates the AMM state after liquidity is provided.
+    ///
+    /// This method updates the base and quote liquidity, LP token supply,
+    /// constant product, and liquidity ratio based on the provided payload.
+    ///
+    /// # Parameters
+    /// - `provide_payload`: Contains the new liquidity amounts, LP tokens to mint, and ratios.
+    ///
+    /// # Returns
+    /// - No return value. Modifies the internal state of the AMM.
     pub(crate) fn provide(&mut self, provide_payload: ProvidePayload) -> (){
         self.base_liquidity = provide_payload.base_liquidity;
         self.quote_liquidity = provide_payload.quote_liquidity;
@@ -298,6 +487,17 @@ impl CpAmm {
         self.constant_product_sqrt = provide_payload.constant_product;
         self.base_quote_ratio_sqrt = provide_payload.base_quote_ratio_sqrt;
     }
+
+    /// Updates the AMM state after liquidity is withdrawn.
+    ///
+    /// This method updates the base and quote liquidity, LP token supply,
+    /// constant product, and liquidity ratio after liquidity is redeemed from the pool.
+    ///
+    /// # Parameters
+    /// - `withdraw_payload`: Contains the new liquidity amounts and LP tokens to burn.
+    ///
+    /// # Returns
+    /// - No return value. Modifies the internal state of the AMM.
     pub(crate) fn withdraw(&mut self, withdraw_payload: WithdrawPayload) -> (){
         self.base_liquidity = withdraw_payload.base_liquidity;
         self.quote_liquidity = withdraw_payload.quote_liquidity;
@@ -305,6 +505,18 @@ impl CpAmm {
         self.constant_product_sqrt = Self::calculate_constant_product_sqrt(self.base_liquidity, self.quote_liquidity).unwrap();
         self.base_quote_ratio_sqrt = withdraw_payload.base_quote_ratio_sqrt;
     }
+
+    /// Updates the AMM state after a token swap operation.
+    ///
+    /// This method adjusts the base and quote liquidity, protocol fees, constant product,
+    /// and liquidity ratio after a swap. It ensures the AMM remains consistent with the
+    /// constant product invariant.
+    ///
+    /// # Parameters
+    /// - `swap_payload`: Contains the updated liquidity values, fees, and swap details.
+    ///
+    /// # Returns
+    /// - No return value. Modifies the internal state of the AMM.
     pub(crate) fn swap(&mut self, swap_payload: SwapPayload) -> () {
         self.base_liquidity = swap_payload.base_liquidity;
         self.quote_liquidity = swap_payload.quote_liquidity;
@@ -321,6 +533,8 @@ impl CpAmm {
 
 #[cfg(test)]
 mod cp_amm_tests {
+    use anchor_lang::Discriminator;
+    use crate::constants::ANCHOR_DISCRIMINATOR;
     use super::*;
 
     #[derive(Default)]
@@ -480,7 +694,88 @@ mod cp_amm_tests {
         }
     }
 
+    /// Tests `CpAmm` account data layout.
+    #[test]
+    fn test_cp_amm_data_layout(){
+        let is_initialized = true;
+        let is_launched = true;
+        let initial_locked_liquidity = 1_000_000u64;
+        let constant_product_sqrt = Q64_128::from_u64(2_000_000);
+        let base_quote_ratio_sqrt = Q64_128::from_u64(1_000_000);
+        let base_liquidity = 500_000u64;
+        let quote_liquidity = 250_000u64;
+        let lp_tokens_supply = 100_000u64;
+        let providers_fee_rate_basis_points = 50u16;
+        let protocol_fee_rate_basis_points = 10u16;
+        let protocol_base_fees_to_redeem = 1_000u64;
+        let protocol_quote_fees_to_redeem = 500u64;
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        let lp_mint = Pubkey::new_unique();
+        let base_vault = Pubkey::new_unique();
+        let quote_vault = Pubkey::new_unique();
+        let locked_lp_vault = Pubkey::new_unique();
+        let amms_config = Pubkey::new_unique();
+        let bump = [42u8];
+        
+        let mut data = [0u8; ANCHOR_DISCRIMINATOR + 327];
+        let mut offset = 0;
 
+        data[offset..offset + ANCHOR_DISCRIMINATOR].copy_from_slice(&CpAmm::discriminator()); offset += ANCHOR_DISCRIMINATOR;
+        data[offset] = is_initialized as u8; offset += 1;
+        data[offset] = is_launched as u8; offset += 1;
+        data[offset..offset + 8].copy_from_slice(&initial_locked_liquidity.to_le_bytes()); offset += 8;
+        data[offset..offset + 16].copy_from_slice(&constant_product_sqrt.get_fractional_bits().to_le_bytes()); offset += 16;
+        data[offset..offset + 8].copy_from_slice(&constant_product_sqrt.get_integer_bits().to_le_bytes()); offset += 8;
+        data[offset..offset + 16].copy_from_slice(&base_quote_ratio_sqrt.get_fractional_bits().to_le_bytes()); offset += 16;
+        data[offset..offset + 8].copy_from_slice(&base_quote_ratio_sqrt.get_integer_bits().to_le_bytes()); offset += 8;
+        data[offset..offset + 8].copy_from_slice(&base_liquidity.to_le_bytes()); offset += 8;
+        data[offset..offset + 8].copy_from_slice(&quote_liquidity.to_le_bytes()); offset += 8;
+        data[offset..offset + 8].copy_from_slice(&lp_tokens_supply.to_le_bytes()); offset += 8;
+        data[offset..offset + 2].copy_from_slice(&providers_fee_rate_basis_points.to_le_bytes()); offset += 2;
+        data[offset..offset + 2].copy_from_slice(&protocol_fee_rate_basis_points.to_le_bytes()); offset += 2;
+        data[offset..offset + 8].copy_from_slice(&protocol_base_fees_to_redeem.to_le_bytes()); offset += 8;
+        data[offset..offset + 8].copy_from_slice(&protocol_quote_fees_to_redeem.to_le_bytes()); offset += 8;
+        data[offset..offset + 32].copy_from_slice(base_mint.as_ref()); offset += 32;
+        data[offset..offset + 32].copy_from_slice(quote_mint.as_ref()); offset += 32;
+        data[offset..offset + 32].copy_from_slice(lp_mint.as_ref()); offset += 32;
+        data[offset..offset + 32].copy_from_slice(base_vault.as_ref()); offset += 32;
+        data[offset..offset + 32].copy_from_slice(quote_vault.as_ref()); offset += 32;
+        data[offset..offset + 32].copy_from_slice(locked_lp_vault.as_ref()); offset += 32;
+        data[offset..offset + 32].copy_from_slice(amms_config.as_ref()); offset += 32;
+        data[offset] = bump[0]; offset += 1;
+        
+        assert_eq!(ANCHOR_DISCRIMINATOR + CpAmm::INIT_SPACE, offset);
+
+        let deserialized_cp_amm = CpAmm::try_deserialize(&mut data.as_ref()).unwrap();
+
+        assert_eq!(deserialized_cp_amm.is_initialized, is_initialized);
+        assert_eq!(deserialized_cp_amm.is_launched, is_launched);
+        assert_eq!(deserialized_cp_amm.initial_locked_liquidity, initial_locked_liquidity);
+        assert_eq!(deserialized_cp_amm.constant_product_sqrt, constant_product_sqrt);
+        assert_eq!(deserialized_cp_amm.base_quote_ratio_sqrt, base_quote_ratio_sqrt);
+        assert_eq!(deserialized_cp_amm.base_liquidity, base_liquidity);
+        assert_eq!(deserialized_cp_amm.quote_liquidity, quote_liquidity);
+        assert_eq!(deserialized_cp_amm.lp_tokens_supply, lp_tokens_supply);
+        assert_eq!(deserialized_cp_amm.providers_fee_rate_basis_points, providers_fee_rate_basis_points);
+        assert_eq!(deserialized_cp_amm.protocol_fee_rate_basis_points, protocol_fee_rate_basis_points);
+        assert_eq!(deserialized_cp_amm.protocol_base_fees_to_redeem, protocol_base_fees_to_redeem);
+        assert_eq!(deserialized_cp_amm.protocol_quote_fees_to_redeem, protocol_quote_fees_to_redeem);
+        assert_eq!(deserialized_cp_amm.base_mint, base_mint);
+        assert_eq!(deserialized_cp_amm.quote_mint, quote_mint);
+        assert_eq!(deserialized_cp_amm.lp_mint, lp_mint);
+        assert_eq!(deserialized_cp_amm.base_vault, base_vault);
+        assert_eq!(deserialized_cp_amm.quote_vault, quote_vault);
+        assert_eq!(deserialized_cp_amm.locked_lp_vault, locked_lp_vault);
+        assert_eq!(deserialized_cp_amm.amms_config, amms_config);
+        assert_eq!(deserialized_cp_amm.bump, bump);
+        
+        let mut serialized_cp_amm = Vec::new();
+        deserialized_cp_amm.try_serialize(&mut serialized_cp_amm).unwrap();
+        assert_eq!(serialized_cp_amm.as_slice(), data.as_ref());
+    }
+    
+    /// Tests getter methods of the `CpAmm` struct.
     #[test]
     fn test_cp_amm_getters() {
         let default_pubkey = Pubkey::new_unique();
@@ -524,10 +819,11 @@ mod cp_amm_tests {
         assert_eq!(amm.providers_fee_rate_basis_points(), 25);
         assert_eq!(amm.protocol_fee_rate_basis_points(), 15);
     }
-
+    
     mod state_change_tests {
         use super::*;
 
+        /// Tests the `provide` method of `CpAmm`.
         #[test]
         fn test_provide() {
             let mut amm = CpAmmBuilder::new().build();
@@ -550,6 +846,7 @@ mod cp_amm_tests {
             assert_eq!(amm.constant_product_sqrt, Q64_128::from_u64(2000));
         }
 
+        /// Tests the `withdraw` method of `CpAmm`.
         #[test]
         fn test_withdraw() {
             let mut amm = CpAmmBuilder::new().build();
@@ -572,6 +869,7 @@ mod cp_amm_tests {
             assert_eq!(amm.constant_product_sqrt, Q64_128::from_u64(2000));
         }
 
+        /// Tests the `swap` method of `CpAmm`.
         #[test]
         fn test_swap() {
             let mut amm = CpAmmBuilder::new().build();
@@ -598,6 +896,8 @@ mod cp_amm_tests {
     
     mod operations_calculations_tests {
         use super::*;
+
+        /// Tests the `check_state` method of `CpAmm`.
         #[test]
         fn test_check_state() {
             let amm1 = CpAmmBuilder::new()
@@ -616,6 +916,8 @@ mod cp_amm_tests {
             assert!(amm1.check_state().is_err());
             assert!(amm2.check_state().is_ok());
         }
+
+        /// Tests the `get_launch_payload` method of `CpAmm`.
         #[test]
         fn test_get_launch_payload() {
             let amm = CpAmmBuilder::new()
@@ -639,10 +941,6 @@ mod cp_amm_tests {
         }
 
         /// Tests the `get_provide_payload` method of `CpAmm`.
-        ///
-        /// Ensures that the method correctly calculates the updated state of the pool when
-        /// additional liquidity is provided. Validates the updated base and quote liquidity,
-        /// the new liquidity ratio, and the LP tokens minted.
         #[test]
         fn test_get_provide_payload() {
             let initial_base_liquidity = 4_000_000;
@@ -678,6 +976,8 @@ mod cp_amm_tests {
             assert_eq!(payload.lp_tokens_to_mint, expected_lp_tokens_to_mint);
             assert_eq!(payload.lp_tokens_supply, expected_lp_tokens_supply);
         }
+
+        /// Tests the `get_withdraw_payload` method of `CpAmm`.
         #[test]
         fn test_get_withdraw_payload() {
             let initial_base_liquidity = 6_000_000;
@@ -712,57 +1012,96 @@ mod cp_amm_tests {
             assert_eq!(payload.quote_withdraw_amount, expected_quote_withdraw_amount);
             assert_eq!(payload.lp_tokens_supply, expected_lp_tokens_supply);
         }
-        /*
-                #[test]
-                fn test_get_base_to_quote_swap_payload() {
-                    let amm = CpAmmBuilder::new()
-                        .is_launched(true)
-                        .base_liquidity(1000)
-                        .quote_liquidity(2000)
-                        .protocol_base_fees_to_redeem(0)
-                        .build();
+
+        /// Tests the `get_base_to_quote_swap_payload` method of `CpAmm`.
+        #[test]
+        fn test_get_base_to_quote_swap_payload() {
+            let initial_base_liquidity = 6_000_000;
+            let initial_quote_liquidity = 1_500_000;
+            let protocol_fee_basis_points = 100;
+            let providers_fee_basis_points = 100;
+            let initial_constant_product_sqrt = Q64_128::from_u64(3_000_000);
+            let initial_base_quote_ratio_sqrt = Q64_128::from_u64(2);
+            let initial_lp_tokens_supply = 3_000_000;
+                
+            let amm = CpAmmBuilder::new()
+                .is_launched(true)
+                .base_liquidity(initial_base_liquidity)
+                .quote_liquidity(initial_quote_liquidity)
+                .constant_product_sqrt(initial_constant_product_sqrt)
+                .base_quote_ratio_sqrt(initial_base_quote_ratio_sqrt)
+                .lp_tokens_supply(initial_lp_tokens_supply)
+                .protocol_fee_rate_basis_points(protocol_fee_basis_points)
+                .providers_fee_rate_basis_points(providers_fee_basis_points)
+                .build();
         
-                    let base_amount = 100;
-                    let estimated_result = 190;
-                    let allowed_slippage = 10;
+            let base_amount: u64 = 3_061_224;
+            let protocol_fee = base_amount * protocol_fee_basis_points as u64 / 10000;
+            let estimated_result = 500_000;
+            let allowed_slippage = 0;
+
+            
+            let payload = amm.get_base_to_quote_swap_payload(base_amount, estimated_result, allowed_slippage).unwrap();
         
-                    let payload = amm
-                        .get_base_to_quote_swap_payload(base_amount, estimated_result, allowed_slippage)
-                        .unwrap();
+            assert_eq!(payload.base_liquidity, initial_base_liquidity + base_amount - protocol_fee);
+            assert_eq!(payload.quote_liquidity, initial_quote_liquidity - estimated_result);
+            assert_eq!(payload.protocol_fees_to_redeem, protocol_fee);
+            assert_eq!(payload.amount_to_withdraw, estimated_result);
+            assert!(payload.is_in_out);
+        }
+
+        /// Tests the `get_quote_to_base_swap_payload` method of `CpAmm`.
+        #[test]
+        fn test_get_quote_to_base_swap_payload() {
+            let initial_base_liquidity = 6_000_000;
+            let initial_quote_liquidity = 1_500_000;
+            let protocol_fee_basis_points = 100;
+            let providers_fee_basis_points = 100;
+            let initial_constant_product_sqrt = Q64_128::from_u64(3_000_000);
+            let initial_base_quote_ratio_sqrt = Q64_128::from_u64(2);
+            let initial_lp_tokens_supply = 3_000_000;
+                
+            let amm = CpAmmBuilder::new()
+                .is_launched(true)
+                .base_liquidity(initial_base_liquidity)
+                .quote_liquidity(initial_quote_liquidity)
+                .constant_product_sqrt(initial_constant_product_sqrt)
+                .base_quote_ratio_sqrt(initial_base_quote_ratio_sqrt)
+                .lp_tokens_supply(initial_lp_tokens_supply)
+                .protocol_fee_rate_basis_points(protocol_fee_basis_points)
+                .providers_fee_rate_basis_points(providers_fee_basis_points)
+                .build();
+
+            let quote_amount: u64 = 510_204;
+            let protocol_fee = quote_amount * protocol_fee_basis_points as u64 / 10000;
+            let estimated_result = 1_500_000;
+            let allowed_slippage = 0;
         
-                    assert!(payload.base_liquidity > 0);
-                    assert!(payload.quote_liquidity > 0);
-                    assert!(payload.protocol_fees_to_redeem > 0);
-                    assert!(payload.amount_to_withdraw > 0);
-                    assert_eq!(payload.is_in_out, true);
-                }
-        
-                #[test]
-                fn test_get_quote_to_base_swap_payload() {
-                    let amm = CpAmmBuilder::new()
-                        .is_launched(true)
-                        .base_liquidity(1000)
-                        .quote_liquidity(2000)
-                        .protocol_quote_fees_to_redeem(0)
-                        .build();
-        
-                    let quote_amount = 200;
-                    let estimated_result = 90;
-                    let allowed_slippage = 10;
-        
-                    let payload = amm
-                        .get_quote_to_base_swap_payload(quote_amount, estimated_result, allowed_slippage)
-                        .unwrap();
-        
-                    assert!(payload.base_liquidity > 0);
-                    assert!(payload.quote_liquidity > 0);
-                    assert!(payload.protocol_fees_to_redeem > 0);
-                    assert!(payload.amount_to_withdraw > 0);
-                    assert_eq!(payload.is_in_out, false);
-                }*/
+            let payload = amm
+                .get_quote_to_base_swap_payload(quote_amount, estimated_result, allowed_slippage)
+                .unwrap();
+
+            assert_eq!(payload.base_liquidity, initial_base_liquidity - estimated_result);
+            assert_eq!(payload.quote_liquidity, initial_quote_liquidity + quote_amount - protocol_fee);
+            assert_eq!(payload.protocol_fees_to_redeem, protocol_fee);
+            assert_eq!(payload.amount_to_withdraw, estimated_result);
+            assert!(!payload.is_in_out);
+        }
     }
 }
 
+/// Represents the data required to launch the AMM.
+///
+/// This struct contains the initial parameters for the pool, including
+/// the locked liquidity, initial ratios, and the supply of LP tokens.
+///
+/// # Fields
+/// - `initial_locked_liquidity`: The amount of liquidity that will be locked in the pool upon launch.
+/// - `constant_product_sqrt`: The square root of the constant product invariant.
+/// - `base_quote_ratio_sqrt`: The square root of the ratio between base and quote liquidity.
+/// - `base_liquidity`: The initial base token liquidity in the pool.
+/// - `quote_liquidity`: The initial quote token liquidity in the pool.
+/// - `lp_tokens_supply`: The total supply of LP tokens minted upon launch.
 #[derive(Debug)]
 pub struct LaunchPayload {
     initial_locked_liquidity: u64,
@@ -773,6 +1112,15 @@ pub struct LaunchPayload {
     lp_tokens_supply: u64,
 }
 impl LaunchPayload {
+    /// Creates a new `LaunchPayload` instance with the specified parameters.
+    ///
+    /// # Parameters
+    /// - `initial_locked_liquidity`: The locked liquidity amount.
+    /// - `constant_product_sqrt`: The square root of the constant product.
+    /// - `base_quote_ratio_sqrt`: The square root of the base-to-quote liquidity ratio.
+    /// - `base_liquidity`: The base token liquidity.
+    /// - `quote_liquidity`: The quote token liquidity.
+    /// - `lp_tokens_supply`: The total LP token supply.
     pub fn new(
         initial_locked_liquidity: u64,
         constant_product_sqrt: Q64_128,
@@ -790,14 +1138,30 @@ impl LaunchPayload {
             lp_tokens_supply,
         }
     }
+
+    /// Returns the amount of initially locked liquidity.
     pub fn initial_locked_liquidity(&self) -> u64{
         self.initial_locked_liquidity
     }
+
+    /// Returns the total liquidity available for use after subtracting the locked liquidity.
     pub fn launch_liquidity(&self) -> u64{
         self.lp_tokens_supply.checked_sub(self.initial_locked_liquidity).unwrap()
     }
 }
 
+/// Represents the data required to provide liquidity to the AMM.
+///
+/// This struct contains the updated state of the pool after liquidity is added,
+/// including the adjusted ratios, constant product, and LP tokens to mint.
+///
+/// # Fields
+/// - `base_quote_ratio_sqrt`: The updated square root of the base-to-quote liquidity ratio.
+/// - `constant_product`: The updated square root of the constant product.
+/// - `base_liquidity`: The updated base token liquidity in the pool.
+/// - `quote_liquidity`: The updated quote token liquidity in the pool.
+/// - `lp_tokens_supply`: The updated total supply of LP tokens.
+/// - `lp_tokens_to_mint`: The number of LP tokens to mint for the liquidity provider.
 #[derive(Debug)]
 pub struct ProvidePayload {
     base_quote_ratio_sqrt: Q64_128,
@@ -808,6 +1172,15 @@ pub struct ProvidePayload {
     lp_tokens_to_mint: u64,
 }
 impl ProvidePayload {
+    /// Creates a new `ProvidePayload` instance with the specified parameters.
+    ///
+    /// # Parameters
+    /// - `base_quote_ratio_sqrt`: The updated square root of the liquidity ratio.
+    /// - `constant_product`: The updated square root of the constant product.
+    /// - `base_liquidity`: The updated base liquidity amount.
+    /// - `quote_liquidity`: The updated quote liquidity amount.
+    /// - `lp_tokens_supply`: The updated LP token supply.
+    /// - `lp_tokens_to_mint`: The LP tokens to mint for the provider.
     pub fn new(
         base_quote_ratio_sqrt: Q64_128,
         constant_product: Q64_128,
@@ -825,11 +1198,25 @@ impl ProvidePayload {
             lp_tokens_to_mint,
         }
     }
+    
+    /// Returns the number of LP tokens to mint for the liquidity provider.
     pub fn lp_tokens_to_mint(&self) -> u64{
         self.lp_tokens_to_mint
     }
 }
 
+/// Represents the data required to withdraw liquidity from the AMM.
+///
+/// This struct contains the updated state of the pool and the amounts
+/// of base and quote tokens withdrawn after liquidity is removed.
+///
+/// # Fields
+/// - `base_quote_ratio_sqrt`: The updated square root of the base-to-quote liquidity ratio.
+/// - `base_liquidity`: The updated base token liquidity in the pool.
+/// - `quote_liquidity`: The updated quote token liquidity in the pool.
+/// - `lp_tokens_supply`: The updated total supply of LP tokens.
+/// - `base_withdraw_amount`: The amount of base tokens withdrawn.
+/// - `quote_withdraw_amount`: The amount of quote tokens withdrawn.
 #[derive(Debug)]
 pub struct WithdrawPayload{
     base_quote_ratio_sqrt: Q64_128,
@@ -840,6 +1227,15 @@ pub struct WithdrawPayload{
     quote_withdraw_amount: u64
 }
 impl WithdrawPayload {
+    /// Creates a new `WithdrawPayload` instance with the specified parameters.
+    ///
+    /// # Parameters
+    /// - `base_quote_ratio_sqrt`: The updated square root of the liquidity ratio.
+    /// - `base_liquidity`: The updated base liquidity amount.
+    /// - `quote_liquidity`: The updated quote liquidity amount.
+    /// - `lp_tokens_supply`: The updated LP token supply.
+    /// - `base_withdraw_amount`: The base tokens withdrawn.
+    /// - `quote_withdraw_amount`: The quote tokens withdrawn.
     pub fn new(
         base_quote_ratio_sqrt: Q64_128,
         base_liquidity: u64,
@@ -857,14 +1253,30 @@ impl WithdrawPayload {
             quote_withdraw_amount,
         }
     }
+
+    /// Returns the amount of base tokens withdrawn.
     pub fn base_withdraw_amount(&self) -> u64{
         self.base_withdraw_amount
     }
+
+
+    /// Returns the amount of quote tokens withdrawn.
     pub fn quote_withdraw_amount(&self) -> u64{
         self.quote_withdraw_amount
     }
 }
 
+/// Represents the data required for a token swap operation in the AMM.
+///
+/// This struct contains the updated state of the pool after a swap
+/// and the fees generated during the operation.
+///
+/// # Fields
+/// - `base_liquidity`: The updated base token liquidity in the pool.
+/// - `quote_liquidity`: The updated quote token liquidity in the pool.
+/// - `protocol_fees_to_redeem`: The protocol fees collected from the swap.
+/// - `amount_to_withdraw`: The amount of tokens to withdraw after the swap.
+/// - `is_in_out`: Indicates whether the swap is "in-to-out" (true) or "out-to-in" (false).
 #[derive(Debug)]
 pub struct SwapPayload {
     base_liquidity: u64,
@@ -875,6 +1287,14 @@ pub struct SwapPayload {
 }
 
 impl SwapPayload {
+    /// Creates a new `SwapPayload` instance with the specified parameters.
+    ///
+    /// # Parameters
+    /// - `base_liquidity`: The updated base token liquidity.
+    /// - `quote_liquidity`: The updated quote token liquidity.
+    /// - `protocol_fees_to_redeem`: The protocol fees collected during the swap.
+    /// - `amount_to_withdraw`: The amount of tokens withdrawn.
+    /// - `is_in_out`: Indicates the direction of the swap.
     fn new(base_liquidity: u64, quote_liquidity: u64, protocol_fees_to_redeem: u64, amount_to_withdraw: u64, is_in_out: bool) -> Self {
         Self{
             base_liquidity,
@@ -884,6 +1304,8 @@ impl SwapPayload {
             is_in_out,
         }
     }
+
+    /// Returns the amount of tokens to withdraw after the swap.
     pub fn amount_to_withdraw(&self) -> u64{
         self.amount_to_withdraw
     }
@@ -893,6 +1315,7 @@ impl SwapPayload {
 mod payloads_tests {
     use super::*;
 
+    /// Tests the `LaunchPayload` struct's creation and getters.
     #[test]
     fn test_launch_payload() {
         let payload = LaunchPayload::new(
@@ -915,6 +1338,7 @@ mod payloads_tests {
         assert_eq!(payload.launch_liquidity(), 5000);
     }
 
+    /// Tests the `ProvidePayload` struct's creation and getters.
     #[test]
     fn test_provide_payload() {
         let payload = ProvidePayload::new(
@@ -936,6 +1360,7 @@ mod payloads_tests {
         assert_eq!(payload.lp_tokens_to_mint(), 7000);
     }
 
+    /// Tests the `WithdrawPayload` struct's creation and getters.
     #[test]
     fn test_withdraw_payload() {
         let payload = WithdrawPayload::new(
@@ -958,6 +1383,7 @@ mod payloads_tests {
         assert_eq!(payload.quote_withdraw_amount(), 2000);
     }
 
+    /// Tests the `SwapPayload` struct's creation and getters.
     #[test]
     fn test_swap_payload() {
         let payload = SwapPayload::new(4000, 5000, 6000, 7000, true);
