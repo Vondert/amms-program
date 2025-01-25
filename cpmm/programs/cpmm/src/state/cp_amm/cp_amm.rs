@@ -400,6 +400,24 @@ impl CpAmm {
             false
         ))
     }
+
+    /// Prepares the payload for collecting protocol fees from the AMM.
+    ///
+    /// This method checks if there are any protocol fees available for redemption and creates
+    /// a `CollectFeesPayload` containing the amounts of base and quote token fees.
+    ///
+    /// # Returns
+    /// - `Ok(CollectFeesPayload)`: Contains the protocol fees available for redemption for both base and quote tokens.
+    /// - `Err(ErrorCode::ProvidersFeesIsZero)`: If both `protocol_base_fees_to_redeem` and `protocol_quote_fees_to_redeem` are zero, meaning no fees are available to collect.
+    pub fn get_collect_fees_payload(&self) -> Result<CollectFeesPayload>{
+        require!(self.protocol_base_fees_to_redeem > 0 || self.protocol_quote_fees_to_redeem > 0, ErrorCode::ProvidersFeesIsZero);
+        Ok(CollectFeesPayload::new(
+            self.protocol_base_fees_to_redeem,
+            self.protocol_quote_fees_to_redeem,
+            0,
+            0
+        ))
+    }
 }
 
 impl CpAmm {
@@ -517,7 +535,7 @@ impl CpAmm {
     ///
     /// # Returns
     /// - No return value. Modifies the internal state of the AMM.
-    pub(crate) fn swap(&mut self, swap_payload: SwapPayload) -> () {
+    pub(crate) fn swap(&mut self, swap_payload: SwapPayload) {
         self.base_liquidity = swap_payload.base_liquidity;
         self.quote_liquidity = swap_payload.quote_liquidity;
         if swap_payload.is_in_out{
@@ -529,6 +547,23 @@ impl CpAmm {
         self.constant_product_sqrt = Self::calculate_constant_product_sqrt(self.base_liquidity, self.quote_liquidity).unwrap();
         self.base_quote_ratio_sqrt = Self::calculate_base_quote_ratio_sqrt(self.base_liquidity, self.quote_liquidity).unwrap();
     }
+
+    /// Updates the protocol fees for the AMM based on the provided payload.
+    ///
+    /// This method sets the protocol fees available for redemption to the updated values
+    /// specified in the `CollectFeesPayload`.
+    ///
+    /// # Parameters
+    /// - `collect_fees_payload`: A `CollectFeesPayload` containing the updated protocol fees
+    ///   for both base and quote tokens.
+    ///
+    /// # Returns
+    /// - None. This method directly modifies the internal state of the AMM.
+    pub(crate) fn collect_fees(&mut self, collect_fees_payload: CollectFeesPayload) {
+        self.protocol_base_fees_to_redeem = collect_fees_payload.new_protocol_base_fees_to_redeem;
+        self.protocol_quote_fees_to_redeem = collect_fees_payload.new_protocol_quote_fees_to_redeem;
+    }
+
 }
 
 #[cfg(test)]
@@ -892,6 +927,18 @@ mod cp_amm_tests {
             assert_eq!(amm.constant_product_sqrt, Q64_128::from_u64(1000));
             assert_eq!(amm.base_quote_ratio_sqrt, Q64_128::from_u64(1));
         }
+
+        /// Tests the `collect_fees` method of `CpAmm`.
+        #[test]
+        fn test_collect_fees() {
+            let mut amm = CpAmmBuilder::new().protocol_base_fees_to_redeem(123213).protocol_quote_fees_to_redeem(213442).build();
+
+            let collect_fees_payload = CollectFeesPayload::new(123213, 213442, 0,0);
+
+            amm.collect_fees(collect_fees_payload);
+            assert_eq!(amm.protocol_base_fees_to_redeem, 0);
+            assert_eq!(amm.protocol_quote_fees_to_redeem, 0);
+        }
     }
     
     mod operations_calculations_tests {
@@ -1086,6 +1133,24 @@ mod cp_amm_tests {
             assert_eq!(payload.protocol_fees_to_redeem, protocol_fee);
             assert_eq!(payload.amount_to_withdraw, estimated_result);
             assert!(!payload.is_in_out);
+        }
+
+        /// Tests the `get_collect_fees_payload` method of `CpAmm`.
+        #[test]
+        fn test_get_collect_fees_payload() {
+            let protocol_base_fees_to_redeem = 1234353;
+            let protocol_quote_fees_to_redeem = 67574567;
+            let amm = CpAmmBuilder::new()
+                .protocol_base_fees_to_redeem(protocol_base_fees_to_redeem)
+                .protocol_quote_fees_to_redeem(protocol_quote_fees_to_redeem)
+                .build();
+
+            let payload = amm.get_collect_fees_payload().unwrap();
+
+            assert_eq!(payload.protocol_base_fees_to_redeem, protocol_base_fees_to_redeem);
+            assert_eq!(payload.protocol_quote_fees_to_redeem, protocol_quote_fees_to_redeem);
+            assert_eq!(payload.new_protocol_base_fees_to_redeem, 0);
+            assert_eq!(payload.new_protocol_quote_fees_to_redeem, 0);
         }
     }
 }
@@ -1311,6 +1376,65 @@ impl SwapPayload {
     }
 }
 
+/// Represents the data required for collecting protocol fees in the AMM.
+///
+/// This struct contains the protocol fees for redemption and left fees.
+///
+/// # Fields
+/// - `protocol_base_fees_to_redeem`: The amount of protocol fees in base tokens for redemption.
+/// - `protocol_quote_fees_to_redeem`: The amount of protocol fees in quote tokens for redemption.
+/// - `new_protocol_base_fees_to_redeem`: Left amount of protocol fees in base tokens available for redemption.
+/// - `new_protocol_quote_fees_to_redeem`: Left amount of protocol fees in quote tokens available for redemption.
+#[derive(Debug)]
+pub struct CollectFeesPayload {
+    /// The amount of protocol fees in base tokens that will be redeemed.
+    protocol_base_fees_to_redeem: u64,
+
+    /// The amount of protocol fees in quote tokens that will be redeemed.
+    protocol_quote_fees_to_redeem: u64,
+    
+    /// Left amount of protocol fees in base tokens that can be redeemed.
+    new_protocol_base_fees_to_redeem: u64,
+
+    /// Left amount of protocol fees in quote tokens that can be redeemed.
+    new_protocol_quote_fees_to_redeem: u64,
+}
+
+impl CollectFeesPayload {
+    /// Creates a new `CollectFeesPayload` instance with the specified parameters.
+    ///
+    /// # Parameters
+    /// - `protocol_base_fees_to_redeem`: The amount of protocol fees in base tokens for redemption.
+    /// - `protocol_quote_fees_to_redeem`: The amount of protocol fees in quote tokens for redemption.
+    /// - `new_protocol_base_fees_to_redeem`: Left amount of protocol fees in base tokens available for redemption.
+    /// - `new_protocol_quote_fees_to_redeem`: Left amount of protocol fees in quote tokens available for redemption.
+    ///
+    /// # Returns
+    /// - A new instance of `CollectFeesPayload`.
+    pub fn new(
+        protocol_base_fees_to_redeem: u64,
+        protocol_quote_fees_to_redeem: u64,
+        new_protocol_base_fees_to_redeem: u64,
+        new_protocol_quote_fees_to_redeem: u64,
+    ) -> Self {
+        Self {
+            protocol_base_fees_to_redeem,
+            protocol_quote_fees_to_redeem,
+            new_protocol_base_fees_to_redeem,
+            new_protocol_quote_fees_to_redeem
+        }
+    }
+
+    /// Returns the amount of protocol fees in base tokens for redemption.
+    pub fn protocol_base_fees_to_redeem(&self) -> u64 {
+        self.protocol_base_fees_to_redeem
+    }
+
+    /// Returns the amount of protocol fees in quote tokens for redemption.
+    pub fn protocol_quote_fees_to_redeem(&self) -> u64 {
+        self.protocol_quote_fees_to_redeem
+    }
+}
 #[cfg(test)]
 mod payloads_tests {
     use super::*;
@@ -1395,5 +1519,18 @@ mod payloads_tests {
         assert!(payload.is_in_out);
 
         assert_eq!(payload.amount_to_withdraw(), 7000);
+    }
+    
+    /// Tests the `CollectFeesPayload` struct's creation and getters.
+    #[test]
+    fn test_collect_fees_payload() {
+        let payload = CollectFeesPayload::new(112314, 536454000, 0, 0);
+
+        assert_eq!(payload.protocol_base_fees_to_redeem, 112314);
+        assert_eq!(payload.protocol_quote_fees_to_redeem, 536454000);
+        assert_eq!(payload.new_protocol_base_fees_to_redeem, 0);
+        assert_eq!(payload.new_protocol_quote_fees_to_redeem, 0);
+        assert_eq!(payload.protocol_base_fees_to_redeem(), 112314);
+        assert_eq!(payload.protocol_quote_fees_to_redeem(), 536454000);
     }
 }

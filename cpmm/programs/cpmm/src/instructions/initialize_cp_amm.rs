@@ -51,23 +51,7 @@ pub struct InitializeCpAmm<'info> {
         associated_token::mint = lp_mint,
         associated_token::authority = signer,
     )]
-    pub signer_lp_token_account: Account<'info, TokenAccount>, 
-    
-    /*   #[account(
-         init,
-         payer = signer,
-         associated_token::mint = base_mint,
-         associated_token::authority = cp_amm
-     )]
-   pub base_vault: Account<'info, TokenAccount>,
-   #[account(
-         init,
-         payer = signer,
-         associated_token::mint = quote_mint,
-         associated_token::authority = cp_amm
-     )]
-     pub quote_vault: Account<'info, TokenAccount>,*/
-    
+    pub signer_lp_token_account: Account<'info, TokenAccount>,
     pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,

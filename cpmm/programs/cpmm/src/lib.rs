@@ -51,4 +51,7 @@ pub mod cpmm {
     pub fn swap_in_cp_amm(ctx: Context<SwapInCpAmm>, swap_amount: u64, estimated_result: u64, allowed_slippage: u64, is_in_out: bool) -> Result<()>{
         swap_in_cp_amm::handler(ctx, swap_amount, estimated_result, allowed_slippage, is_in_out)
     }
+    pub fn collect_fees_from_cp_amm(ctx: Context<CollectFeesFromCpAmm>) -> Result<()>{
+        collect_fees_from_cp_amm::handler(ctx)
+    }
 }

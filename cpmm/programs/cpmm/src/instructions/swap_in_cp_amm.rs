@@ -13,8 +13,6 @@ pub struct SwapInCpAmm<'info>{
     pub signer: Signer<'info>,
     pub base_mint: Box<InterfaceAccount<'info, Mint>>,
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
-    #[account(mut)]
-    pub lp_mint: Box<Account<'info, token::Mint>>,
 
     #[account(
         init_if_needed,
@@ -46,7 +44,7 @@ pub struct SwapInCpAmm<'info>{
         constraint = quote_mint.key() == cp_amm.quote_mint().key(),
         constraint = cp_amm_base_vault.key() == cp_amm.base_vault().key(),
         constraint = cp_amm_quote_vault.key() == cp_amm.quote_vault().key(),
-        seeds = [CpAmm::SEED, lp_mint.key().as_ref()],
+        seeds = [CpAmm::SEED, cp_amm.key().as_ref()],
         bump = cp_amm.bump()
     )]
     pub cp_amm: Box<Account<'info, CpAmm>>,
@@ -115,17 +113,17 @@ impl<'info> SwapInCpAmm<'info>{
 }
 
 pub(crate) fn handler(ctx: Context<SwapInCpAmm>, swap_amount: u64, estimated_result: u64, allowed_slippage: u64, is_in_out: bool) -> Result<()> {
-    let in_transfer_instruction = ctx.accounts.get_in_transfer_instruction(swap_amount, is_in_out)?;
+    let in_transfer_instruction = Box::new(ctx.accounts.get_in_transfer_instruction(swap_amount, is_in_out)?);
     let swap_payload = if is_in_out{
         ctx.accounts.cp_amm.get_base_to_quote_swap_payload(in_transfer_instruction.get_amount_after_fee(), estimated_result, allowed_slippage)?
     } else{
         ctx.accounts.cp_amm.get_quote_to_base_swap_payload(in_transfer_instruction.get_amount_after_fee(), estimated_result, allowed_slippage)?
     };
-    let out_transfer_instruction = ctx.accounts.get_out_transfer_instruction(swap_payload.amount_to_withdraw(), is_in_out)?;
+    let out_transfer_instruction = Box::new(ctx.accounts.get_out_transfer_instruction(swap_payload.amount_to_withdraw(), is_in_out)?);
     in_transfer_instruction.execute(None)?;
     let cp_amm_seeds = ctx.accounts.cp_amm.seeds();
     let out_instruction_seeds: &[&[&[u8]]] = &[&cp_amm_seeds];
-    out_transfer_instruction.execute(Some(&out_instruction_seeds))?;
+    out_transfer_instruction.execute(Some(out_instruction_seeds))?;
     
     ctx.accounts.cp_amm.swap(swap_payload);
     

@@ -76,6 +76,9 @@ pub enum ErrorCode {
     #[msg("Overflow error when swapping.")]
     SwapOverflowError,
     
+    #[msg("Protocol fees to redeem is zero")]
+    ProvidersFeesIsZero,
+    
     // CpAmm integrity errors
     #[msg("Failed to calculate base-to-quote liquidity ratio due to invalid input or overflow.")]
     BaseQuoteRatioCalculationFailed,
