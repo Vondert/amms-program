@@ -16,8 +16,8 @@ use crate::utils::validate_tradable_mint;
 pub struct InitializeCpAmm<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
-    /// CHECK: Amms config's fee authority can be arbitrary
     #[account(mut)]
+    /// CHECK: Amms config's fee authority can be arbitrary
     pub fee_authority: UncheckedAccount<'info>,
     pub base_mint: Box<InterfaceAccount<'info, token_interface::Mint>>,
     #[account(

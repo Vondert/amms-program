@@ -64,9 +64,6 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     /// - `Some((u64, u64))` with the base and quote liquidity amounts.
     /// - `None` if the calculation fails (e.g., due to zero tokens).
     fn calculate_liquidity_from_share(&self, lp_tokens: u64) -> Option<(u64, u64)>{
-        if lp_tokens == 0{
-            return None;
-        }
         let liquidity_share = Q64_128::from_u64(lp_tokens).checked_div(Q64_128::from_u64(self.lp_tokens_supply()))?;
         let constant_product_sqrt_share = self.constant_product_sqrt().checked_mul(liquidity_share)?;
         let base_withdraw = constant_product_sqrt_share.saturating_mul(self.base_quote_ratio_sqrt()).as_u64_round();
