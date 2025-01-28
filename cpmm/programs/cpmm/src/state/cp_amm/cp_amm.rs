@@ -5,7 +5,7 @@ use anchor_spl::token_interface;
 use crate::utils::math::Q64_128;
 use crate::error::ErrorCode;
 use crate::state::AmmsConfig;
-use super::CpAmmCalculate;
+use super::{CpAmmCalculate, CpAmmCore};
 
 /// Represents a Constant Product Automated Market Maker (AMM) pool.
 ///
@@ -136,11 +136,11 @@ impl CpAmm {
         &self.amms_config
     }
 }
-/// Implements the `CpAmmCalculate` trait for the `CpAmm` struct.
+/// Implements the `CpAmmCore` trait for the `CpAmm` struct.
 ///
-/// This implementation defines core logic and calculations for the constant product AMM,
+/// This implementation auto implements 'CpAmmCalculate' trait that defines core logic and calculations for the constant product AMM,
 /// including methods for computing liquidity ratios, validating swaps, and handling fees.
-impl CpAmmCalculate for CpAmm {
+impl CpAmmCore for CpAmm {
     /// Retrieves the square root of the constant product of the pool.
     ///
     /// # Returns

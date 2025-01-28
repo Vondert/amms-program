@@ -1,17 +1,15 @@
 use anchor_lang::prelude::*;
 use crate::utils::math::Q64_128;
 use crate::error::ErrorCode;
+use crate::state::cp_amm::CpAmmCore;
 
-/// A trait for implementing core calculations and constants for a constant product automated market maker (AMM).
+/// A trait for implementing core calculations and constants for a Constant Product Automated Market Maker.
 ///
 /// This trait defines methods and associated constants required for the operation of an AMM,
 /// such as calculating square roots of the constant product, liquidity ratios, and handling fees.
 /// The constants provide essential parameters like tolerance levels, initial liquidity, and fee structures.
-pub(crate) trait CpAmmCalculate {
-    /// The number of decimals for the initial LP token minting.
-    ///
-    /// Example:
-    /// - `LP_MINT_INITIAL_DECIMALS = 5` means the initial locked LP tokens are calculated as `10^5`.
+pub(crate) trait CpAmmCalculate: CpAmmCore {
+    /// The number of decimals for the LP token.
     const LP_MINT_INITIAL_DECIMALS: u8 = 5;
 
     /// The maximum allowable fee rate, expressed in basis points.
@@ -38,49 +36,7 @@ pub(crate) trait CpAmmCalculate {
     ///   when recalculating the liquidity ratio of the pool.
     /// - Defined as a `Q64_128` value representing a tolerance of `0.00001%`.
     const ADJUST_LIQUIDITY_RATIO_TOLERANCE: Q64_128 = Q64_128::from_bits(0, 3402823669209384634633746074317);
-
-    /// Calculates the square root of the constant product for the AMM.
-    ///
-    /// # Returns
-    /// - A `Q64_128` value representing the square root of the constant product.
-    fn constant_product_sqrt(&self) -> Q64_128;
-
-    /// Calculates the square root of the base-to-quote liquidity ratio.
-    ///
-    /// # Returns
-    /// - A `Q64_128` value representing the square root of the ratio between base and quote liquidity.
-    fn base_quote_ratio_sqrt(&self) -> Q64_128;
-
-    /// Retrieves the base liquidity of the AMM pool.
-    ///
-    /// # Returns
-    /// - A `u64` value representing the amount of base liquidity in the pool.
-    fn base_liquidity(&self) -> u64;
-
-    /// Retrieves the quote liquidity of the AMM pool.
-    ///
-    /// # Returns
-    /// - A `u64` value representing the amount of quote liquidity in the pool.
-    fn quote_liquidity(&self) -> u64;
-
-    /// Retrieves the total supply of LP tokens in the pool.
-    ///
-    /// # Returns
-    /// - A `u64` value representing the total supply of LP tokens.
-    fn lp_tokens_supply(&self) -> u64;
-
-    /// Retrieves the fee rate for liquidity providers, expressed in basis points.
-    ///
-    /// # Returns
-    /// - A `u16` value representing the provider's fee rate in basis points.
-    fn providers_fee_rate_basis_points(&self) -> u16;
-
-    /// Retrieves the protocol fee rate, expressed in basis points.
-    ///
-    /// # Returns
-    /// - A `u16` value representing the protocol's fee rate in basis points.
-    fn protocol_fee_rate_basis_points(&self) -> u16;
-
+    
     /// Calculates the amount of LP tokens to mint based on the provided liquidity.
     ///
     /// # Parameters
@@ -132,8 +88,8 @@ pub(crate) trait CpAmmCalculate {
     /// - `Some((u64, u64))` with the new base and quote liquidity values.
     /// - `None` if the calculation fails.
     fn calculate_afterswap_liquidity(&self, swap_amount: u64, is_in_out: bool) -> Option<(u64, u64)>{
-        let mut new_base_liquidity = 0;
-        let mut new_quote_liquidity = 0;
+        let new_base_liquidity;
+        let new_quote_liquidity;
         if is_in_out {
             new_base_liquidity = self.base_liquidity().checked_add(swap_amount)?;
             new_quote_liquidity = self.calculate_opposite_liquidity(new_base_liquidity)?;
@@ -287,12 +243,14 @@ pub(crate) trait CpAmmCalculate {
     }
 }
 
+impl<T: CpAmmCore> CpAmmCalculate for T{}
+
 #[cfg(test)]
 mod tests {
-    use crate::state::cp_amm::CpAmmCalculate;
+    use crate::state::cp_amm::{CpAmmCore, CpAmmCalculate};
     use crate::utils::math::Q64_128;
 
-    /// A helper struct for testing the `CpAmmCalculate` trait.
+    /// A helper struct for testing the `CpAmmCalculate` traits.
     struct TestCpAmm{
         base_liquidity: u64,
         quote_liquidity: u64,
@@ -325,7 +283,7 @@ mod tests {
             )
         }
     }
-    impl CpAmmCalculate for TestCpAmm {
+    impl CpAmmCore for TestCpAmm {
         fn constant_product_sqrt(&self) -> Q64_128 {
             self.constant_product_sqrt
         }
@@ -354,7 +312,7 @@ mod tests {
             self.protocol_fee_rate_basis_points
         }
     }
-
+    
     /// Unit tests for the `TestCpAmm` implementation.
     mod unit_tests {
         use super::*;
