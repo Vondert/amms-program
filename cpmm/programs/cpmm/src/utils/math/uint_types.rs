@@ -13,6 +13,7 @@ impl Space for U192 {
 	const INIT_SPACE: usize = 24;
 }
 
+#[cfg(test)]
 impl U192 {
 	/// Converts `U192` into a `U384` by expanding it into 384 bits.
 	///

@@ -8,9 +8,4 @@ describe("cpmm", () => {
 
   const program = anchor.workspace.Cpmm as Program<Cpmm>;
 
-  it("Is initialized!", async () => {
-    // Add your test here.
-    const tx = await program.methods.initialize().rpc();
-    console.log("Your transaction signature", tx);
-  });
 });

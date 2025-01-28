@@ -6,13 +6,36 @@ use anchor_spl::token_interface::spl_token_2022::extension::transfer_fee::Transf
 use crate::utils::token_instructions::{TransferContextRegular, TransferContextWithFee};
 use crate::error::ErrorCode;
 
-pub struct TransferTokensInstruction<'at, 'bt, 'ct, 'info> {
+/// Represents an instruction to transfer tokens between accounts.
+///
+/// This struct handles both standard SPL tokens and SPL Token 2022 with transfer fees.
+///
+/// - `amount`: The amount of tokens to transfer.
+/// - `decimals`: Number of decimal places in the token's representation.
+/// - `context`: Encapsulates the transfer context, which can be either a regular transfer or one with fees.
+pub(crate) struct TransferTokensInstruction<'at, 'bt, 'ct, 'info> {
     amount: u64,
     decimals: u8,
     context: TransferContextType<'at, 'bt, 'ct, 'info>,
 }
 impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
 
+    /// Creates a new instance of `TransferTokensInstruction`.
+    ///
+    /// Automatically determines whether the mint and token program require a regular transfer
+    /// or one with transfer fees based on the token type and its associated metadata.
+    ///
+    /// - `amount`: The amount of tokens to transfer.
+    /// - `mint`: The mint account of the token.
+    /// - `from`: The source token account.
+    /// - `from_authority`: Authority of the source account.
+    /// - `to`: The destination token account.
+    /// - `token_program`: Program for standard SPL tokens.
+    /// - `token_2022_program`: Program for SPL Token 2022.
+    ///
+    /// Returns:
+    /// - `Ok(Self)` if the instruction is successfully created.
+    /// - `Err(ErrorCode)` if any validation fails.
     pub fn new(
         amount: u64, 
         mint: &'_ InterfaceAccount<'info, Mint>, 
@@ -22,7 +45,7 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
         token_program: &'_ Program<'info, Token>, 
         token_2022_program: &'_ Program<'info, Token2022>
     ) -> Result<Self> {
-        require!(amount >= from.amount, ErrorCode::InsufficientBalanceForTransfer);
+        require!(from.amount >= amount, ErrorCode::InsufficientBalanceForTransfer);
         
         let context = if mint.to_account_info().owner.key() == token_program.key(){
             TransferContextType::Regular(
@@ -51,6 +74,14 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
             context,
         })
     }
+
+    /// Executes the transfer operation.
+    ///
+    /// - `optional_signers_seeds`: Optional signer seeds for PDA accounts.
+    ///
+    /// Returns:
+    /// - `Ok(())` if the transfer is successful.
+    /// - `Err(ErrorCode)` if the transfer fails.
     pub fn execute(mut self, optional_signers_seeds: Option<&'at[&'bt[&'ct[u8]]]>) -> Result<()>{
         if let Some(signer_seeds) = optional_signers_seeds {
             self.context = self.context.add_signers_seeds(signer_seeds);
@@ -64,13 +95,27 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
             }
         }
     }
-    
+
+    /// Gets the number of decimals for the token.
+    ///
+    /// Returns:
+    /// - The number of decimals.
     pub fn get_decimals(&self) -> u8{
         self.decimals
     }
+    
+    /// Calculates the amount of tokens that will be received after deducting transfer fees.
+    ///
+    /// Returns:
+    /// - The net amount of tokens after fees.
     pub fn get_amount_after_fee(&self) -> u64{
         self.get_raw_amount().checked_sub(self.get_fee()).unwrap()
     }
+
+    /// Retrieves the transfer fee for the transaction.
+    ///
+    /// Returns:
+    /// - The fee amount for the transaction.
     pub fn get_fee(&self) -> u64{
         match &self.context{
             TransferContextType::Regular(_) => {
@@ -81,17 +126,31 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
             }
         }
     }
+
+    /// Retrieves the raw amount of tokens to be transferred.
+    ///
+    /// Returns:
+    /// - The raw transfer amount.
     pub fn get_raw_amount(&self) -> u64{
         self.amount
     }
 }
 
-
-pub(crate) enum TransferContextType<'at, 'bt, 'ct, 'info> {
+/// Represents the context of the transfer operation, which can be either:
+/// - `Regular`: For transfers without fees.
+/// - `WithFee`: For transfers that include a transfer fee.
+enum TransferContextType<'at, 'bt, 'ct, 'info> {
     Regular(TransferContextRegular<'at, 'bt, 'ct, 'info> ),
     WithFee(TransferContextWithFee<'at, 'bt, 'ct, 'info> )
 }
-impl<'at, 'bt, 'ct, 'info> TransferContextType<'at, 'bt, 'ct, 'info>{
+impl<'at, 'bt, 'ct> TransferContextType<'at, 'bt, 'ct, '_>{
+
+    /// Adds signer seeds to the context for PDA account signing.
+    ///
+    /// - `signers_seeds`: The seeds for signing.
+    ///
+    /// Returns:
+    /// - A new context with the signer seeds added.
     fn add_signers_seeds(self, signers_seeds: &'at[&'bt[&'ct[u8]]]) -> Self {
         match self {
             TransferContextType::Regular(context) => {

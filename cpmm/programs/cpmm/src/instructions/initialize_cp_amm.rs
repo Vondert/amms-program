@@ -4,16 +4,21 @@ use anchor_spl::{
     token::{Mint, Token, TokenAccount},
     token_interface
 };
+use crate::constants::CP_AMM_INITIALIZE_PRICE_IN_LAMPORTS;
 use crate::state::{AmmsConfig, cp_amm::{
     CpAmm, 
     CpAmmCalculate
 }};
+use crate::utils::system_instructions::TransferLamportsInstruction;
 use crate::utils::validate_tradable_mint;
 
 #[derive(Accounts)]
 pub struct InitializeCpAmm<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
+    /// CHECK: Amms config's fee authority can be arbitrary
+    #[account(mut)]
+    pub fee_authority: UncheckedAccount<'info>,
     pub base_mint: Box<InterfaceAccount<'info, token_interface::Mint>>,
     #[account(
         constraint = base_mint.key() != quote_mint.key()
@@ -31,6 +36,7 @@ pub struct InitializeCpAmm<'info> {
     pub lp_mint: Box<Account<'info, Mint>>,
     
     #[account(
+        constraint = amms_config.fee_authority.key() == fee_authority.key(),
         seeds = [AmmsConfig::SEED, amms_config.id.to_le_bytes().as_ref()],
         bump = amms_config.bump
     )]
@@ -67,6 +73,14 @@ impl<'info> InitializeCpAmm<'info>{
         let quote_mint = self.quote_mint.as_ref();
         validate_tradable_mint(quote_mint)
     }
+    fn get_pay_initial_lamports_instruction(&self, lamports: u64) -> Result<TransferLamportsInstruction<'_, '_, '_, 'info>>{
+        TransferLamportsInstruction::new(
+            lamports,
+            self.signer.to_account_info(),
+            self.fee_authority.to_account_info(),
+            &self.system_program
+        )
+    }
 }
 
 pub(crate) fn handler(ctx: Context<InitializeCpAmm>) -> Result<()> {
@@ -74,6 +88,9 @@ pub(crate) fn handler(ctx: Context<InitializeCpAmm>) -> Result<()> {
     
     accounts.validate_base_mint()?;
     accounts.validate_quote_mint()?;
+
+    let pay_initial_lamports_instruction = Box::new(accounts.get_pay_initial_lamports_instruction(CP_AMM_INITIALIZE_PRICE_IN_LAMPORTS)?);
+    pay_initial_lamports_instruction.execute()?;
     
     accounts.cp_amm.initialize(
         &accounts.base_mint,

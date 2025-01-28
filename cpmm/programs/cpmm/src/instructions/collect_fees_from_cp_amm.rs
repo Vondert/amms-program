@@ -11,11 +11,12 @@ use crate::utils::token_instructions::TransferTokensInstruction;
 pub struct CollectFeesFromCpAmm<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
+    #[account(mut)]
+    pub fee_authority: UncheckedAccount<'info>,
     pub base_mint: Box<InterfaceAccount<'info, Mint>>,
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
     /// CHECK: Amms config's fee authority can be arbitrary
-    pub fee_authority: UncheckedAccount<'info>,
-
+    
     #[account(
         init_if_needed,
         payer = signer,
