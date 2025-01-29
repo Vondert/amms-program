@@ -5,7 +5,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
     describe("\nCpAmm tests", () =>{
         let unauthorizedUser: KeyPairSigner;
         before(async () =>{
-            unauthorizedUser = await getTestUser(cpmmTestingEnvironment.rpc, cpmmTestingEnvironment.rpcSubscriptions, 100);
+            unauthorizedUser = await getTestUser(cpmmTestingEnvironment.rpcClient, 100);
         })
         it("Initialize CpAmm", async () => {
 

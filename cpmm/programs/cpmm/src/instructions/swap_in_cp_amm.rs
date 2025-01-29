@@ -42,9 +42,7 @@ pub struct SwapInCpAmm<'info>{
         constraint = base_mint.key() == cp_amm.base_mint().key(),
         constraint = quote_mint.key() == cp_amm.quote_mint().key(),
         constraint = cp_amm_base_vault.key() == cp_amm.base_vault().key(),
-        constraint = cp_amm_quote_vault.key() == cp_amm.quote_vault().key(),
-        seeds = [CpAmm::SEED, cp_amm.key().as_ref()],
-        bump = cp_amm.bump()
+        constraint = cp_amm_quote_vault.key() == cp_amm.quote_vault().key()
     )]
     pub cp_amm: Box<Account<'info, CpAmm>>,
 

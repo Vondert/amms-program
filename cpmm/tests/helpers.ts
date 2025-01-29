@@ -1,26 +1,37 @@
 import {
-    airdropFactory,
-    generateKeyPairSigner, KeyPairSigner,
-    lamports,
+    address,
+    Address,
+    airdropFactory, appendTransactionMessageInstructions,
+    Commitment,
+    CompilableTransactionMessage, createKeyPairSignerFromBytes,
+    createSolanaRpc,
+    createSolanaRpcSubscriptions, createTransactionMessage,
+    generateKeyPairSigner,
+    getSignatureFromTransaction, IInstruction,
+    KeyPairSigner,
+    lamports, pipe,
     Rpc,
     RpcSubscriptions,
+    sendAndConfirmTransactionFactory, setTransactionMessageFeePayerSigner, setTransactionMessageLifetimeUsingBlockhash,
+    signTransactionMessageWithSigners,
     SolanaRpcApi,
-    SolanaRpcSubscriptionsApi
+    SolanaRpcSubscriptionsApi,
+    TransactionMessageWithBlockhashLifetime
 } from "@solana/web3.js";
-import {Program} from "@coral-xyz/anchor";
-import { Cpmm } from "../target/types/cpmm";
+import * as program from "../clients/js/src/generated";
+import fs from "node:fs";
 
 const LAMPORTS_PER_SOL = BigInt(1_000_000_000);
-export type CpmmTestingEnvironment = {
-    program: Program<Cpmm>;
+
+export type RpcClient = {
     rpc: Rpc<SolanaRpcApi>;
     rpcSubscriptions: RpcSubscriptions<SolanaRpcSubscriptionsApi>;
 };
-export const getTestUser = async (rpc: Rpc<SolanaRpcApi>, rpcSubscriptions: RpcSubscriptions<SolanaRpcSubscriptionsApi>, airdrop_amount: number): Promise<KeyPairSigner> =>{
+export const getTestUser = async (rpcClient: RpcClient, airdrop_amount: number): Promise<KeyPairSigner> =>{
     const user = await generateKeyPairSigner();
     console.log("Generated user address:", user.address);
 
-    const airdrop = airdropFactory({ rpc, rpcSubscriptions });
+    const airdrop = airdropFactory(rpcClient);
     await airdrop({
         commitment: 'processed',
         lamports: lamports(LAMPORTS_PER_SOL * BigInt(airdrop_amount)),
@@ -31,3 +42,49 @@ export const getTestUser = async (rpc: Rpc<SolanaRpcApi>, rpcSubscriptions: RpcS
 
     return user;
 }
+
+
+export const createTransaction = async (rpcClient: RpcClient, payer: KeyPairSigner, instructions: IInstruction[]) => {
+    const { value: latestBlockhash } = await rpcClient.rpc.getLatestBlockhash().send();
+    const transaction = pipe(
+        createTransactionMessage({ version: 0 }),
+        (tx) => setTransactionMessageFeePayerSigner(payer, tx),
+        (tx) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+        (tx) => appendTransactionMessageInstructions(instructions, tx)
+    );
+    return transaction;
+};
+export const signAndSendTransaction = async (
+    rpcClient: RpcClient,
+    transactionMessage: CompilableTransactionMessage & TransactionMessageWithBlockhashLifetime,
+    commitment: Commitment = 'confirmed'
+) => {
+    const signedTransaction = await signTransactionMessageWithSigners(transactionMessage);
+    await sendAndConfirmTransactionFactory(rpcClient)(signedTransaction, {
+        commitment,
+    });
+    const signature = getSignatureFromTransaction(signedTransaction);
+    return signature;
+};
+
+export type CpmmTestingEnvironment = {
+    program: typeof program,
+    rpcClient: RpcClient,
+    rent: Address,
+    owner: KeyPairSigner,
+    headAuthority: KeyPairSigner,
+    ammsConfigsManagerAuthority: KeyPairSigner,
+    user: KeyPairSigner
+};
+
+export const createCpmmTestingEnvironment = async (): Promise<CpmmTestingEnvironment> => {
+    const httpEndpoint = 'http://127.0.0.1:8899';
+    const wsEndpoint = 'ws://127.0.0.1:8900';
+    const rpcClient: RpcClient = {rpc: createSolanaRpc(httpEndpoint), rpcSubscriptions: createSolanaRpcSubscriptions(wsEndpoint)}
+    const owner = await createKeyPairSignerFromBytes(Buffer.from(JSON.parse(fs.readFileSync("../owner.json", 'utf8'))));
+    const headAuthority = await getTestUser(rpcClient, 100);
+    const ammsConfigsManagerAuthority = await getTestUser(rpcClient, 100);
+    const user = await getTestUser(rpcClient, 100);
+    const rent = address("SysvarRent111111111111111111111111111111111");
+    return {rpcClient, headAuthority, owner, program, rent, ammsConfigsManagerAuthority, user};
+};
