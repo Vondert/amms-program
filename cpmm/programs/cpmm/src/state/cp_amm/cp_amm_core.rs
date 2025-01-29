@@ -31,16 +31,4 @@ pub trait CpAmmCore {
     /// # Returns
     /// - A `u64` value representing the total supply of LP tokens.
     fn lp_tokens_supply(&self) -> u64;
-
-    /// Retrieves the fee rate for liquidity providers, expressed in basis points.
-    ///
-    /// # Returns
-    /// - A `u16` value representing the provider's fee rate in basis points.
-    fn providers_fee_rate_basis_points(&self) -> u16;
-
-    /// Retrieves the protocol fee rate, expressed in basis points.
-    ///
-    /// # Returns
-    /// - A `u16` value representing the protocol's fee rate in basis points.
-    fn protocol_fee_rate_basis_points(&self) -> u16;
 }

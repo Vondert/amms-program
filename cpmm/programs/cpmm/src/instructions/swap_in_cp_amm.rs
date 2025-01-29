@@ -111,11 +111,15 @@ impl<'info> SwapInCpAmm<'info>{
 
 pub(crate) fn handler(ctx: Context<SwapInCpAmm>, swap_amount: u64, estimated_result: u64, allowed_slippage: u64, is_in_out: bool) -> Result<()> {
     let in_transfer_instruction = Box::new(ctx.accounts.get_in_transfer_instruction(swap_amount, is_in_out)?);
-    let swap_payload = if is_in_out{
-        ctx.accounts.cp_amm.get_base_to_quote_swap_payload(in_transfer_instruction.get_amount_after_fee(), estimated_result, allowed_slippage)?
-    } else{
-        ctx.accounts.cp_amm.get_quote_to_base_swap_payload(in_transfer_instruction.get_amount_after_fee(), estimated_result, allowed_slippage)?
-    };
+    let swap_payload = ctx.accounts.cp_amm.get_swap_payload(
+        in_transfer_instruction.get_amount_after_fee(), 
+        estimated_result, 
+        allowed_slippage,
+        ctx.accounts.amms_config.providers_fee_rate_basis_points,
+        ctx.accounts.amms_config.protocol_fee_rate_basis_points,
+        is_in_out
+    )?;
+    
     let out_transfer_instruction = Box::new(ctx.accounts.get_out_transfer_instruction(swap_payload.amount_to_withdraw(), is_in_out)?);
     in_transfer_instruction.execute(None)?;
     let cp_amm_seeds = ctx.accounts.cp_amm.seeds();

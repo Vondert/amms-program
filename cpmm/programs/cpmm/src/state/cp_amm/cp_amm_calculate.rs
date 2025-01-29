@@ -132,27 +132,6 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
         Ok(())
     }
 
-    /// Calculates the protocol fee for a swap amount.
-    ///
-    /// # Parameters
-    /// - `swap_amount`: The amount being swapped.
-    ///
-    /// # Returns
-    /// - A `u64` representing the protocol fee.
-    fn calculate_protocol_fee_amount(&self, swap_amount: u64) -> u64{
-        ((swap_amount as u128) * (self.protocol_fee_rate_basis_points() as u128) / Self::FEE_MAX_BASIS_POINTS) as u64
-    }
-    /// Calculates the fee for liquidity providers for a swap amount.
-    ///
-    /// # Parameters
-    /// - `swap_amount`: The amount being swapped.
-    ///
-    /// # Returns
-    /// - A `u64` representing the providers' fee.
-    fn calculate_providers_fee_amount(&self, swap_amount: u64) -> u64 {
-        ((swap_amount as u128) * (self.providers_fee_rate_basis_points() as u128) / Self::FEE_MAX_BASIS_POINTS) as u64
-    }
-
     /// Calculates the opposite liquidity value based on the constant product formula.
     ///
     /// # Parameters
@@ -170,6 +149,18 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
         Some(opposite_liquidity)
     }
 
+    /// Calculates the fee for a given swap amount based on the provided fee rate.
+    ///
+    /// # Parameters
+    /// - `swap_amount`: The amount of tokens being swapped.
+    /// - `fee_basis_points`: The fee rate expressed in **basis points** (1 basis point = 0.01%).
+    ///
+    /// # Returns
+    /// - A `u64` representing the **calculated fee amount**.
+    fn calculate_fee_amount(swap_amount: u64, fee_basis_points: u16) -> u64 {
+        ((swap_amount as u128) * (fee_basis_points as u128) / Self::FEE_MAX_BASIS_POINTS) as u64
+    }
+    
     /// Validates the result of a swap against the estimated result and allowed slippage.
     ///
     /// # Parameters
@@ -254,15 +245,13 @@ mod tests {
         constant_product_sqrt: Q64_128,
         base_quote_ratio_sqrt: Q64_128,
         lp_tokens_supply: u64,
-        providers_fee_rate_basis_points: u16,
-        protocol_fee_rate_basis_points: u16,
     }
     
     impl TestCpAmm{
         /// Creates a new instance of `TestCpAmm` with calculated values.
         ///
         /// Returns `None` if any calculation fails.
-        fn try_new(base_liquidity: u64, quote_liquidity: u64, providers_fee_rate_basis_points: u16, protocol_fee_rate_basis_points: u16) -> Option<Self>{
+        fn try_new(base_liquidity: u64, quote_liquidity: u64) -> Option<Self>{
             let constant_product_sqrt = TestCpAmm::calculate_constant_product_sqrt(base_liquidity, quote_liquidity)?;
             let lp_tokens_supply = TestCpAmm::calculate_launch_lp_tokens(constant_product_sqrt).ok()?;
             let base_quote_ratio = TestCpAmm::calculate_base_quote_ratio_sqrt(base_liquidity, quote_liquidity)?;
@@ -273,9 +262,7 @@ mod tests {
                     quote_liquidity,
                     constant_product_sqrt,
                     base_quote_ratio_sqrt: base_quote_ratio,
-                    lp_tokens_supply: lp_tokens_supply.0 + lp_tokens_supply.1,
-                    providers_fee_rate_basis_points,
-                    protocol_fee_rate_basis_points
+                    lp_tokens_supply: lp_tokens_supply.0 + lp_tokens_supply.1
                 }
             )
         }
@@ -299,14 +286,6 @@ mod tests {
 
         fn lp_tokens_supply(&self) -> u64 {
             self.lp_tokens_supply
-        }
-
-        fn providers_fee_rate_basis_points(&self) -> u16 {
-            self.providers_fee_rate_basis_points
-        }
-
-        fn protocol_fee_rate_basis_points(&self) -> u16 {
-            self.protocol_fee_rate_basis_points
         }
     }
     
@@ -461,7 +440,7 @@ mod tests {
         fn test_calculate_liquidity_from_share() {
             let base_liquidity: u64 = 1_000_000;
             let quote_liquidity: u64 = 20_000_000;
-            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity, 0, 0).unwrap();
+            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity).unwrap();
 
             let lp_tokens = 2_000;
             let (base, quote) = amm.calculate_liquidity_from_share(lp_tokens).unwrap();
@@ -495,7 +474,7 @@ mod tests {
         fn test_calculate_lp_mint_for_provided_liquidity() {
             let base_liquidity: u64 = 1_000_000;
             let quote_liquidity: u64 = 20_000_000;
-            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity, 0, 0).unwrap();
+            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity).unwrap();
 
             let new_base_liquidity = base_liquidity + 1_500;
             let new_quote_liquidity = quote_liquidity + 3_000;
@@ -518,41 +497,18 @@ mod tests {
             );
         }
 
-        /// Tests `calculate_protocol_fee_amount` for correctness.
+        /// Tests `calculate_fee_amount` for correctness.
         #[test]
-        fn test_calculate_protocol_fee_amount() {
-            let base_liquidity: u64 = 1_000_000;
-            let quote_liquidity: u64 = 20_000_000;
-            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity, 20, 100).unwrap();
-
+        fn test_calculate_fee_amount() {
+            let fee_basis_points = 100;
             let swap_amount = 10_000;
-            let fee = amm.calculate_protocol_fee_amount(swap_amount);
+            let fee = TestCpAmm::calculate_fee_amount(swap_amount, fee_basis_points);
 
-            let expected_fee = (swap_amount as u128 * amm.protocol_fee_rate_basis_points() as u128 / 10_000) as u64;
+            let expected_fee = (swap_amount as u128 * fee_basis_points as u128 / 10_000) as u64;
 
             assert_eq!(
                 fee, expected_fee,
                 "Protocol fee mismatch. Expected: {}, Got: {}",
-                expected_fee,
-                fee
-            );
-        }
-
-        /// Tests `calculate_providers_fee_amount` for correctness.
-        #[test]
-        fn test_calculate_providers_fee_amount() {
-            let base_liquidity: u64 = 1_000_000;
-            let quote_liquidity: u64 = 20_000_000;
-            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity, 20, 100).unwrap();
-
-            let swap_amount = 10_000;
-            let fee = amm.calculate_providers_fee_amount(swap_amount);
-
-            let expected_fee = (swap_amount as u128 * amm.providers_fee_rate_basis_points() as u128 / 10_000) as u64;
-
-            assert_eq!(
-                fee, expected_fee,
-                "Providers fee mismatch. Expected: {}, Got: {}",
                 expected_fee,
                 fee
             );
@@ -563,7 +519,7 @@ mod tests {
         fn test_calculate_opposite_liquidity() {
             let base_liquidity: u64 = 1_000_000;
             let quote_liquidity: u64 = 20_000_000;
-            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity, 20, 100).unwrap();
+            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity).unwrap();
 
             let x_liquidity = 52_334;
             let result = amm.calculate_opposite_liquidity(x_liquidity);
@@ -583,7 +539,7 @@ mod tests {
         fn test_calculate_afterswap_liquidity() {
             let base_liquidity: u64 = 1_000_000;
             let quote_liquidity: u64 = 20_000_000;
-            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity, 20, 100).unwrap();
+            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity).unwrap();
 
             let swap_amount = 500;
 
@@ -627,7 +583,7 @@ mod tests {
         fn test_validate_and_calculate_liquidity_ratio() {
             let base_liquidity: u64 = 1_000_000;
             let quote_liquidity: u64 = 20_000_000;
-            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity, 20, 100).unwrap();
+            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity).unwrap();
 
             let new_base_liquidity = 2_000_000;
             let new_quote_liquidity = 40_000_000;
@@ -653,7 +609,7 @@ mod tests {
         fn test_validate_swap_constant_product() {
             let base_liquidity: u64 = 1_000_000;
             let quote_liquidity: u64 = 20_000_000;
-            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity, 20, 100).unwrap();
+            let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity).unwrap();
 
             let new_base_liquidity = 5_000_000;
             let new_quote_liquidity = 4_000_000;

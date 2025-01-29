@@ -43,12 +43,6 @@ pub struct CpAmm {
     /// Total supply of LP tokens minted to liquidity providers.
     lp_tokens_supply: u64, // 8 bytes
 
-    /// Fee rate for liquidity providers, measured in basis points (1 basis point = 0.01%).
-    providers_fee_rate_basis_points: u16, // 2 bytes
-
-    /// Protocol fee rate from the associated `AmmsConfig` account, measured in basis points (1 = 0.01%).
-    protocol_fee_rate_basis_points: u16, // 2 bytes
-
     /// Accumulated base token fees that can be redeemed by the `AmmsConfig` account's authority.
     protocol_base_fees_to_redeem: u64, // 8 bytes
 
@@ -182,22 +176,6 @@ impl CpAmmCore for CpAmm {
     fn lp_tokens_supply(&self) -> u64 {
         self.lp_tokens_supply
     }
-
-    /// Retrieves the fee rate for liquidity providers, expressed in basis points.
-    ///
-    /// # Returns
-    /// - A `u16` value representing the provider's fee rate in basis points (1 = 0.01%).
-    fn providers_fee_rate_basis_points(&self) -> u16 {
-        self.providers_fee_rate_basis_points
-    }
-
-    /// Retrieves the protocol fee rate, expressed in basis points.
-    ///
-    /// # Returns
-    /// - A `u16` value representing the protocol's fee rate in basis points (1 = 0.01%).
-    fn protocol_fee_rate_basis_points(&self) -> u16 {
-        self.protocol_fee_rate_basis_points
-    }
 }
 
 impl CpAmm {
@@ -319,85 +297,56 @@ impl CpAmm {
         })
     }
 
-    /// Prepares the payload for swapping a base token amount into a quote token amount.
+    /// Computes the swap payload for exchanging tokens within the AMM.
     ///
-    /// It calculates the updated pool state, including fees, and validates the constant product invariant.
-    ///
-    /// # Parameters
-    /// - `base_amount`: The amount of base tokens to swap.
-    /// - `estimated_result`: The estimated amount of quote tokens to receive.
-    /// - `allowed_slippage`: The maximum allowable slippage in the swap.
-    ///
-    /// # Returns
-    /// - `Ok(SwapPayload)` containing the updated pool state and swap details.
-    /// - `Err(ErrorCode)` if any checks fail or calculations encounter errors.
-    pub fn get_base_to_quote_swap_payload(&self, base_amount: u64, estimated_result: u64, allowed_slippage: u64) -> Result<SwapPayload>{
-        self.check_state()?;
-        require!(base_amount > 0, ErrorCode::SwapAmountIsZero);
-        require!(estimated_result > 0, ErrorCode::EstimatedResultIsZero);
-
-        let base_fee_amount = self.calculate_providers_fee_amount(base_amount);
-        let base_protocol_fee_amount = self.calculate_protocol_fee_amount(base_amount);
-        let protocol_fees_to_redeem = self.protocol_base_fees_to_redeem.checked_add(base_protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
-        
-        let base_amount_after_fees = base_amount.checked_sub(base_fee_amount).unwrap().checked_sub(base_protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
-        
-        let (new_base_liquidity, new_quote_liquidity) = self.calculate_afterswap_liquidity(base_amount_after_fees, true).ok_or(ErrorCode::AfterswapCalculationFailed)?;
-
-        // Check constant product change is in acceptable range
-        self.validate_swap_constant_product(new_base_liquidity, new_quote_liquidity)?;
-
-        let quote_delta = self.quote_liquidity.checked_sub(new_quote_liquidity).ok_or(ErrorCode::SwapOverflowError)?;
-
-        Self::check_swap_result(quote_delta, estimated_result, allowed_slippage)?;
-
-        Ok(SwapPayload::new(
-            new_base_liquidity + base_fee_amount,
-            new_quote_liquidity,
-            protocol_fees_to_redeem,
-            quote_delta,
-            true
-        ))
-    }
-
-    /// Prepares the payload for swapping a quote token amount into a base token amount.
-    ///
-    /// It calculates the updated pool state, including fees, and validates the constant product invariant.
+    /// This function handles both **base-to-quote** and **quote-to-base** swaps.
+    /// It calculates the updated pool state, applies provider and protocol fees,
+    /// and validates the constant product invariant.
     ///
     /// # Parameters
-    /// - `quote_amount`: The amount of quote tokens to swap.
-    /// - `estimated_result`: The estimated amount of base tokens to receive.
-    /// - `allowed_slippage`: The maximum allowable slippage in the swap.
+    /// - `swap_amount`: The amount of tokens being swapped (either base or quote).
+    /// - `estimated_result`: Expected amount of tokens to receive after the swap.
+    /// - `allowed_slippage`: Maximum permissible deviation from `estimated_result`.
+    /// - `providers_fee_rate_basis_points`: The liquidity provider's fee rate in basis points.
+    /// - `protocol_fee_rate_basis_points`: The protocol fee rate in basis points.
+    /// - `is_in_out`: `true` if swapping **base → quote**, `false` if swapping **quote → base**.
     ///
     /// # Returns
-    /// - `Ok(SwapPayload)` containing the updated pool state and swap details.
-    /// - `Err(ErrorCode)` if any checks fail or calculations encounter errors.
-    pub fn get_quote_to_base_swap_payload(&self, quote_amount: u64, estimated_result: u64, allowed_slippage: u64) -> Result<SwapPayload>{
+    /// - `Ok(SwapPayload)`: Contains the updated liquidity state and fees.
+    /// - `Err(ErrorCode)`: If any validation fails (e.g., insufficient liquidity, overflow, or slippage exceeded).
+    pub fn get_swap_payload(&self, swap_amount: u64, estimated_result: u64, allowed_slippage: u64, providers_fee_rate_basis_points: u16, protocol_fee_rate_basis_points: u16, is_in_out: bool) -> Result<SwapPayload> {
         self.check_state()?;
-        require!(quote_amount > 0, ErrorCode::SwapAmountIsZero);
+        require!(swap_amount > 0, ErrorCode::SwapAmountIsZero);
         require!(estimated_result > 0, ErrorCode::EstimatedResultIsZero);
+        require!(providers_fee_rate_basis_points + protocol_fee_rate_basis_points <= 10000, ErrorCode::ConfigFeeRateExceeded);
 
-        let quote_fee_amount = self.calculate_providers_fee_amount(quote_amount);
-        let quote_protocol_fee_amount = self.calculate_protocol_fee_amount(quote_amount);
-        let protocol_fees_to_redeem = self.protocol_quote_fees_to_redeem.checked_add(quote_protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
+        let (new_base_liquidity, new_quote_liquidity, amount_to_withdraw, protocol_fees_to_redeem);
+        let providers_fees_to_redeem = Self::calculate_fee_amount(swap_amount, providers_fee_rate_basis_points);
+        let protocol_fee_amount = Self::calculate_fee_amount(swap_amount, protocol_fee_rate_basis_points);
+        if is_in_out {
+            protocol_fees_to_redeem = self.protocol_base_fees_to_redeem.checked_add(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
+            let base_amount_after_fees = swap_amount.checked_sub(providers_fees_to_redeem).unwrap().checked_sub(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
+            (new_base_liquidity, new_quote_liquidity) = self.calculate_afterswap_liquidity(base_amount_after_fees, true).ok_or(ErrorCode::AfterswapCalculationFailed)?;
+            amount_to_withdraw = self.quote_liquidity.checked_sub(new_quote_liquidity).ok_or(ErrorCode::SwapOverflowError)?;
+        }
+        else{
+            protocol_fees_to_redeem = self.protocol_quote_fees_to_redeem.checked_add(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
+            let quote_amount_after_fees = swap_amount.checked_sub(providers_fees_to_redeem).unwrap().checked_sub(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
+            (new_base_liquidity, new_quote_liquidity) = self.calculate_afterswap_liquidity(quote_amount_after_fees, false).ok_or(ErrorCode::AfterswapCalculationFailed)?;
+            amount_to_withdraw = self.base_liquidity.checked_sub(new_base_liquidity).ok_or(ErrorCode::SwapOverflowError)?;
+        }
         
-        let quote_amount_after_fees = quote_amount.checked_sub(quote_fee_amount).unwrap().checked_sub(quote_protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
-
-        let (new_base_liquidity, new_quote_liquidity) = self.calculate_afterswap_liquidity(quote_amount_after_fees, false).ok_or(ErrorCode::AfterswapCalculationFailed)?;
-
         // Check constant product change is in acceptable range
         self.validate_swap_constant_product(new_base_liquidity, new_quote_liquidity)?;
-
-        let base_delta = self.base_liquidity.checked_sub(new_base_liquidity).ok_or(ErrorCode::SwapOverflowError)?;
-
-        Self::check_swap_result(base_delta, estimated_result, allowed_slippage)?;
-
+        Self::check_swap_result(amount_to_withdraw, estimated_result, allowed_slippage)?;
+        
         Ok(SwapPayload::new(
             new_base_liquidity,
-            new_quote_liquidity + quote_fee_amount,
+            new_quote_liquidity,
             protocol_fees_to_redeem,
-            base_delta,
-            false
+            providers_fees_to_redeem,
+            amount_to_withdraw,
+            is_in_out,
         ))
     }
 
@@ -447,9 +396,6 @@ impl CpAmm {
         bump: u8,
     ) -> Result<()>{
         require!(!self.is_initialized, ErrorCode::CpAmmAlreadyInitialized);
-
-        self.providers_fee_rate_basis_points = amms_config.providers_fee_rate_basis_points;
-        self.protocol_fee_rate_basis_points = amms_config.protocol_fee_rate_basis_points;
 
         self.base_mint = base_mint.key();
         self.quote_mint = quote_mint.key();
@@ -526,7 +472,7 @@ impl CpAmm {
 
     /// Updates the AMM state after a token swap operation.
     ///
-    /// This method adjusts the base and quote liquidity, protocol fees, constant product,
+    /// This method adjusts the base and quote liquidity, protocol fees, providers fees, constant product,
     /// and liquidity ratio after a swap. It ensures the AMM remains consistent with the
     /// constant product invariant.
     ///
@@ -539,10 +485,12 @@ impl CpAmm {
         self.base_liquidity = swap_payload.base_liquidity;
         self.quote_liquidity = swap_payload.quote_liquidity;
         if swap_payload.is_in_out{
-            self.protocol_base_fees_to_redeem = swap_payload.protocol_fees_to_redeem
+            self.protocol_base_fees_to_redeem = swap_payload.protocol_fees_to_redeem;
+            self.base_liquidity += swap_payload.providers_fees_to_redeem
         }
         else{
             self.protocol_quote_fees_to_redeem = swap_payload.protocol_fees_to_redeem;
+            self.quote_liquidity += swap_payload.providers_fees_to_redeem
         }
         self.constant_product_sqrt = Self::calculate_constant_product_sqrt(self.base_liquidity, self.quote_liquidity).unwrap();
         self.base_quote_ratio_sqrt = Self::calculate_base_quote_ratio_sqrt(self.base_liquidity, self.quote_liquidity).unwrap();
@@ -582,8 +530,6 @@ mod cp_amm_tests {
         base_liquidity: u64,
         quote_liquidity: u64,
         lp_tokens_supply: u64,
-        providers_fee_rate_basis_points: u16,
-        protocol_fee_rate_basis_points: u16,
         protocol_base_fees_to_redeem: u64,
         protocol_quote_fees_to_redeem: u64,
         base_mint: Pubkey,
@@ -640,16 +586,6 @@ mod cp_amm_tests {
 
         fn lp_tokens_supply(mut self, value: u64) -> Self {
             self.lp_tokens_supply = value;
-            self
-        }
-
-        fn providers_fee_rate_basis_points(mut self, value: u16) -> Self {
-            self.providers_fee_rate_basis_points = value;
-            self
-        }
-
-        fn protocol_fee_rate_basis_points(mut self, value: u16) -> Self {
-            self.protocol_fee_rate_basis_points = value;
             self
         }
 
@@ -713,8 +649,6 @@ mod cp_amm_tests {
                 base_liquidity: self.base_liquidity,
                 quote_liquidity: self.quote_liquidity,
                 lp_tokens_supply: self.lp_tokens_supply,
-                providers_fee_rate_basis_points: self.providers_fee_rate_basis_points,
-                protocol_fee_rate_basis_points: self.protocol_fee_rate_basis_points,
                 protocol_base_fees_to_redeem: self.protocol_base_fees_to_redeem,
                 protocol_quote_fees_to_redeem: self.protocol_quote_fees_to_redeem,
                 base_mint: self.base_mint,
@@ -740,8 +674,6 @@ mod cp_amm_tests {
         let base_liquidity = 500_000u64;
         let quote_liquidity = 250_000u64;
         let lp_tokens_supply = 100_000u64;
-        let providers_fee_rate_basis_points = 50u16;
-        let protocol_fee_rate_basis_points = 10u16;
         let protocol_base_fees_to_redeem = 1_000u64;
         let protocol_quote_fees_to_redeem = 500u64;
         let base_mint = Pubkey::new_unique();
@@ -753,7 +685,7 @@ mod cp_amm_tests {
         let amms_config = Pubkey::new_unique();
         let bump = [42u8];
         
-        let mut data = [0u8; ANCHOR_DISCRIMINATOR + 327];
+        let mut data = [0u8; ANCHOR_DISCRIMINATOR + 323];
         let mut offset = 0;
 
         data[offset..offset + ANCHOR_DISCRIMINATOR].copy_from_slice(&CpAmm::discriminator()); offset += ANCHOR_DISCRIMINATOR;
@@ -767,8 +699,6 @@ mod cp_amm_tests {
         data[offset..offset + 8].copy_from_slice(&base_liquidity.to_le_bytes()); offset += 8;
         data[offset..offset + 8].copy_from_slice(&quote_liquidity.to_le_bytes()); offset += 8;
         data[offset..offset + 8].copy_from_slice(&lp_tokens_supply.to_le_bytes()); offset += 8;
-        data[offset..offset + 2].copy_from_slice(&providers_fee_rate_basis_points.to_le_bytes()); offset += 2;
-        data[offset..offset + 2].copy_from_slice(&protocol_fee_rate_basis_points.to_le_bytes()); offset += 2;
         data[offset..offset + 8].copy_from_slice(&protocol_base_fees_to_redeem.to_le_bytes()); offset += 8;
         data[offset..offset + 8].copy_from_slice(&protocol_quote_fees_to_redeem.to_le_bytes()); offset += 8;
         data[offset..offset + 32].copy_from_slice(base_mint.as_ref()); offset += 32;
@@ -792,8 +722,6 @@ mod cp_amm_tests {
         assert_eq!(deserialized_cp_amm.base_liquidity, base_liquidity);
         assert_eq!(deserialized_cp_amm.quote_liquidity, quote_liquidity);
         assert_eq!(deserialized_cp_amm.lp_tokens_supply, lp_tokens_supply);
-        assert_eq!(deserialized_cp_amm.providers_fee_rate_basis_points, providers_fee_rate_basis_points);
-        assert_eq!(deserialized_cp_amm.protocol_fee_rate_basis_points, protocol_fee_rate_basis_points);
         assert_eq!(deserialized_cp_amm.protocol_base_fees_to_redeem, protocol_base_fees_to_redeem);
         assert_eq!(deserialized_cp_amm.protocol_quote_fees_to_redeem, protocol_quote_fees_to_redeem);
         assert_eq!(deserialized_cp_amm.base_mint, base_mint);
@@ -824,8 +752,6 @@ mod cp_amm_tests {
             .base_liquidity(4000)
             .quote_liquidity(5000)
             .lp_tokens_supply(6000)
-            .providers_fee_rate_basis_points(25)
-            .protocol_fee_rate_basis_points(15)
             .base_mint(default_pubkey)
             .quote_mint(default_pubkey)
             .lp_mint(default_pubkey)
@@ -851,8 +777,6 @@ mod cp_amm_tests {
         assert_eq!(amm.base_liquidity(), 4000);
         assert_eq!(amm.quote_liquidity(), 5000);
         assert_eq!(amm.lp_tokens_supply(), 6000);
-        assert_eq!(amm.providers_fee_rate_basis_points(), 25);
-        assert_eq!(amm.protocol_fee_rate_basis_points(), 15);
     }
     
     mod state_change_tests {
@@ -909,8 +833,8 @@ mod cp_amm_tests {
         fn test_swap() {
             let mut amm = CpAmmBuilder::new().build();
 
-            let swap_payload_in = SwapPayload::new(4000, 1000, 1, 100, true);
-            let swap_payload_out = SwapPayload::new(1000, 1000, 15, 100, false);
+            let swap_payload_in = SwapPayload::new(3980, 1000, 1, 20, 100, true);
+            let swap_payload_out = SwapPayload::new(1000, 985, 15, 15, 100, false);
 
             amm.swap(swap_payload_in);
             assert_eq!(amm.base_liquidity, 4000);
@@ -1060,7 +984,7 @@ mod cp_amm_tests {
             assert_eq!(payload.lp_tokens_supply, expected_lp_tokens_supply);
         }
 
-        /// Tests the `get_base_to_quote_swap_payload` method of `CpAmm`.
+        /// Tests the `get_swap_payload` method of `CpAmm` for in->out swap.
         #[test]
         fn test_get_base_to_quote_swap_payload() {
             let initial_base_liquidity = 6_000_000;
@@ -1078,26 +1002,26 @@ mod cp_amm_tests {
                 .constant_product_sqrt(initial_constant_product_sqrt)
                 .base_quote_ratio_sqrt(initial_base_quote_ratio_sqrt)
                 .lp_tokens_supply(initial_lp_tokens_supply)
-                .protocol_fee_rate_basis_points(protocol_fee_basis_points)
-                .providers_fee_rate_basis_points(providers_fee_basis_points)
                 .build();
         
             let base_amount: u64 = 3_061_224;
             let protocol_fee = base_amount * protocol_fee_basis_points as u64 / 10000;
+            let providers_fee = base_amount * providers_fee_basis_points as u64 / 10000;
             let estimated_result = 500_000;
             let allowed_slippage = 0;
 
             
-            let payload = amm.get_base_to_quote_swap_payload(base_amount, estimated_result, allowed_slippage).unwrap();
+            let payload = amm.get_swap_payload(base_amount, estimated_result, allowed_slippage, providers_fee_basis_points, protocol_fee_basis_points, true).unwrap();
         
-            assert_eq!(payload.base_liquidity, initial_base_liquidity + base_amount - protocol_fee);
+            assert_eq!(payload.base_liquidity, initial_base_liquidity + base_amount - protocol_fee - providers_fee);
             assert_eq!(payload.quote_liquidity, initial_quote_liquidity - estimated_result);
             assert_eq!(payload.protocol_fees_to_redeem, protocol_fee);
+            assert_eq!(payload.providers_fees_to_redeem, providers_fee);
             assert_eq!(payload.amount_to_withdraw, estimated_result);
             assert!(payload.is_in_out);
         }
 
-        /// Tests the `get_quote_to_base_swap_payload` method of `CpAmm`.
+        /// Tests the `get_swap_payload` method of `CpAmm` for out->in swap.
         #[test]
         fn test_get_quote_to_base_swap_payload() {
             let initial_base_liquidity = 6_000_000;
@@ -1115,22 +1039,20 @@ mod cp_amm_tests {
                 .constant_product_sqrt(initial_constant_product_sqrt)
                 .base_quote_ratio_sqrt(initial_base_quote_ratio_sqrt)
                 .lp_tokens_supply(initial_lp_tokens_supply)
-                .protocol_fee_rate_basis_points(protocol_fee_basis_points)
-                .providers_fee_rate_basis_points(providers_fee_basis_points)
                 .build();
 
             let quote_amount: u64 = 510_204;
             let protocol_fee = quote_amount * protocol_fee_basis_points as u64 / 10000;
+            let providers_fee = quote_amount * providers_fee_basis_points as u64 / 10000;
             let estimated_result = 1_500_000;
             let allowed_slippage = 0;
-        
-            let payload = amm
-                .get_quote_to_base_swap_payload(quote_amount, estimated_result, allowed_slippage)
-                .unwrap();
+
+            let payload = amm.get_swap_payload(quote_amount, estimated_result, allowed_slippage, providers_fee_basis_points, protocol_fee_basis_points, false).unwrap();
 
             assert_eq!(payload.base_liquidity, initial_base_liquidity - estimated_result);
-            assert_eq!(payload.quote_liquidity, initial_quote_liquidity + quote_amount - protocol_fee);
+            assert_eq!(payload.quote_liquidity, initial_quote_liquidity + quote_amount - protocol_fee - providers_fee);
             assert_eq!(payload.protocol_fees_to_redeem, protocol_fee);
+            assert_eq!(payload.providers_fees_to_redeem, providers_fee);
             assert_eq!(payload.amount_to_withdraw, estimated_result);
             assert!(!payload.is_in_out);
         }
@@ -1340,6 +1262,7 @@ impl WithdrawPayload {
 /// - `base_liquidity`: The updated base token liquidity in the pool.
 /// - `quote_liquidity`: The updated quote token liquidity in the pool.
 /// - `protocol_fees_to_redeem`: The protocol fees collected from the swap.
+/// - `providers_fees_to_redeem`: The providers fees collected from the swap.
 /// - `amount_to_withdraw`: The amount of tokens to withdraw after the swap.
 /// - `is_in_out`: Indicates whether the swap is "in-to-out" (true) or "out-to-in" (false).
 #[derive(Debug)]
@@ -1347,6 +1270,7 @@ pub struct SwapPayload {
     base_liquidity: u64,
     quote_liquidity: u64,
     protocol_fees_to_redeem: u64,
+    providers_fees_to_redeem: u64,
     amount_to_withdraw: u64,
     is_in_out: bool,
 }
@@ -1358,13 +1282,15 @@ impl SwapPayload {
     /// - `base_liquidity`: The updated base token liquidity.
     /// - `quote_liquidity`: The updated quote token liquidity.
     /// - `protocol_fees_to_redeem`: The protocol fees collected during the swap.
+    /// - `providers_fees_to_redeem`: The providers fees collected from the swap.
     /// - `amount_to_withdraw`: The amount of tokens withdrawn.
     /// - `is_in_out`: Indicates the direction of the swap.
-    fn new(base_liquidity: u64, quote_liquidity: u64, protocol_fees_to_redeem: u64, amount_to_withdraw: u64, is_in_out: bool) -> Self {
+    fn new(base_liquidity: u64, quote_liquidity: u64, protocol_fees_to_redeem: u64, providers_fees_to_redeem: u64, amount_to_withdraw: u64, is_in_out: bool) -> Self {
         Self{
             base_liquidity,
             quote_liquidity,
             protocol_fees_to_redeem,
+            providers_fees_to_redeem,
             amount_to_withdraw,
             is_in_out,
         }
@@ -1510,11 +1436,12 @@ mod payloads_tests {
     /// Tests the `SwapPayload` struct's creation and getters.
     #[test]
     fn test_swap_payload() {
-        let payload = SwapPayload::new(4000, 5000, 6000, 7000, true);
+        let payload = SwapPayload::new(4000, 5000, 6000, 6500,7000, true);
 
         assert_eq!(payload.base_liquidity, 4000);
         assert_eq!(payload.quote_liquidity, 5000);
         assert_eq!(payload.protocol_fees_to_redeem, 6000);
+        assert_eq!(payload.providers_fees_to_redeem, 6500);
         assert_eq!(payload.amount_to_withdraw, 7000);
         assert!(payload.is_in_out);
 
