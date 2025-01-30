@@ -27,7 +27,7 @@ before(async () =>{
     ammsConfigsManagerAddress = await getProgramDerivedAddress({programAddress, seeds: ["amms_configs_manager"]});
     console.log("AMMs Configs Manager PDA:", ammsConfigsManagerAddress);
 
-    ammsConfigAddress = await getProgramDerivedAddress({programAddress, seeds: ["amms_config", getU64Encoder({ endian: Endian.Big }).encode(0)]});
+    ammsConfigAddress = await getProgramDerivedAddress({programAddress, seeds: ["amms_config", getU64Encoder({ endian: Endian.Little }).encode(0)]});
     console.log("AMMs Config PDA:", ammsConfigAddress);
 
     lpMint = await generateKeyPairSigner();
