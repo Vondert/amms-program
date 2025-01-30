@@ -10,16 +10,16 @@ use anchor_lang::prelude::*;
 #[derive(InitSpace)]
 pub struct AmmsConfigsManager {
     /// The public key of the authority responsible for managing configurations.
-    pub authority: Pubkey,  // 32 bytes
+    authority: Pubkey,  // 32 bytes
 
     /// The public key of the head authority, which may have broader governance privileges.
-    pub head_authority: Pubkey, // 32 bytes
+    head_authority: Pubkey, // 32 bytes
 
     /// The number of configurations managed by this account.
-    pub configs_count: u64, // 8 bytes
+    configs_count: u64, // 8 bytes
 
     /// The canonical bump seed used for the account's PDA.
-    pub bump: u8,   // 1 byte
+    bump: u8,   // 1 byte
 }
 
 impl AmmsConfigsManager {
@@ -67,6 +67,19 @@ impl AmmsConfigsManager {
     /// - Panics if the increment operation fails (e.g., due to an overflow).
     pub(crate) fn increment_configs_count(&mut self) {
         self.configs_count = self.configs_count.checked_add(1).unwrap()
+    }
+
+    pub fn head_authority(&self) -> &Pubkey {
+        &self.head_authority
+    }
+    pub fn authority(&self) -> &Pubkey {
+        &self.authority
+    }
+    pub fn configs_count(&self) -> u64 {
+        self.configs_count
+    }
+    pub fn bump(&self) -> u8 {
+        self.bump
     }
 }
 

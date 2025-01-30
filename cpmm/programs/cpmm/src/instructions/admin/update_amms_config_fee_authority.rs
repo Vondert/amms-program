@@ -6,18 +6,18 @@ use crate::state::{AmmsConfig, AmmsConfigsManager};
 pub struct UpdateAmmsConfigFeeAuthority<'info> {
     #[account(
         mut,
-        constraint = (authority.key() == amms_configs_manager.authority || authority.key() == amms_configs_manager.head_authority)
+        constraint = (authority.key() == amms_configs_manager.authority().key() || authority.key() == amms_configs_manager.head_authority().key())
     )]
     authority: Signer<'info>,
     #[account(
         seeds = [AmmsConfigsManager::SEED],
-        bump = amms_configs_manager.bump
+        bump = amms_configs_manager.bump()
     )]
     amms_configs_manager: Account<'info, AmmsConfigsManager>,
     #[account(
         mut,
         seeds = [AmmsConfig::SEED, amms_config.id.to_le_bytes().as_ref()],
-        bump = amms_config.bump
+        bump = amms_config.bump()
     )]
     amms_config: Account<'info, AmmsConfig>,
     /// CHECK: New fee authority can be arbitrary

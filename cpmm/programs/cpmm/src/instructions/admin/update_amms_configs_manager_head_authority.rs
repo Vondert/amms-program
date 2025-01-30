@@ -5,13 +5,13 @@ use crate::state::AmmsConfigsManager;
 pub struct UpdateAmmsConfigsManagerHeadAuthority<'info> {
     #[account(
         mut,
-        constraint = head_authority.key() == amms_configs_manager.head_authority
+        constraint = head_authority.key() == amms_configs_manager.head_authority().key()
     )]
     head_authority: Signer<'info>,
     #[account(
         mut,
         seeds = [AmmsConfigsManager::SEED],
-        bump = amms_configs_manager.bump
+        bump = amms_configs_manager.bump()
     )]
     amms_configs_manager: Account<'info, AmmsConfigsManager>,
     /// CHECK: New head authority can be arbitrary

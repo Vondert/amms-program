@@ -31,7 +31,7 @@ pub struct SwapInCpAmm<'info>{
 
     #[account(
         seeds = [AmmsConfig::SEED, amms_config.id.to_le_bytes().as_ref()],
-        bump = amms_config.bump
+        bump = amms_config.bump()
     )]
     pub amms_config: Box<Account<'info, AmmsConfig>>,
 
@@ -42,7 +42,9 @@ pub struct SwapInCpAmm<'info>{
         constraint = base_mint.key() == cp_amm.base_mint().key(),
         constraint = quote_mint.key() == cp_amm.quote_mint().key(),
         constraint = cp_amm_base_vault.key() == cp_amm.base_vault().key(),
-        constraint = cp_amm_quote_vault.key() == cp_amm.quote_vault().key()
+        constraint = cp_amm_quote_vault.key() == cp_amm.quote_vault().key(),
+        seeds = [CpAmm::SEED, cp_amm.lp_mint.as_ref()],
+        bump = cp_amm.bump()
     )]
     pub cp_amm: Box<Account<'info, CpAmm>>,
 
@@ -115,8 +117,8 @@ pub(crate) fn handler(ctx: Context<SwapInCpAmm>, swap_amount: u64, estimated_res
         in_transfer_instruction.get_amount_after_fee(), 
         estimated_result, 
         allowed_slippage,
-        ctx.accounts.amms_config.providers_fee_rate_basis_points,
-        ctx.accounts.amms_config.protocol_fee_rate_basis_points,
+        ctx.accounts.amms_config.providers_fee_rate_basis_points(),
+        ctx.accounts.amms_config.protocol_fee_rate_basis_points(),
         is_in_out
     )?;
     

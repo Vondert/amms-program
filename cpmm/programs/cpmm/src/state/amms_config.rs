@@ -10,19 +10,19 @@ use crate::error::ErrorCode;
 #[derive(InitSpace)]
 pub struct AmmsConfig {
     /// Canonical bump seed for the account's PDA.
-    pub bump: u8,   // 1 byte
+    bump: u8,   // 1 byte
 
     /// A unique identifier for this configuration in the `AmmsConfigsManager` collection.
     pub id: u64,    // 8 bytes
 
     /// The public key of the authority responsible for collecting protocol fees from pools.
-    pub fee_authority: Pubkey,  // 32 bytes
+    fee_authority: Pubkey,  // 32 bytes
 
     /// The fee rate for liquidity providers, measured in basis points (1 basis point = 0.01%).
-    pub providers_fee_rate_basis_points: u16, // 2 bytes
+    providers_fee_rate_basis_points: u16, // 2 bytes
 
     /// The protocol's fee rate, measured in basis points (1 basis point = 0.01%).
-    pub protocol_fee_rate_basis_points: u16, // 2 bytes
+    protocol_fee_rate_basis_points: u16, // 2 bytes
 }
 
 impl AmmsConfig {
@@ -48,7 +48,7 @@ impl AmmsConfig {
         self.id = id;
         self.protocol_fee_rate_basis_points = protocol_fee_rate_basis_points;
         self.providers_fee_rate_basis_points = providers_fee_rate_basis_points;
-        self.update_fee_authority(fee_authority);
+        self.fee_authority = fee_authority;
         
         Ok(())
     }
@@ -59,6 +59,39 @@ impl AmmsConfig {
     /// - `fee_authority`: The new public key of the authority responsible for collecting fees.
     pub(crate) fn update_fee_authority(&mut self, fee_authority: Pubkey) {
         self.fee_authority = fee_authority;
+    }
+
+
+    pub(crate) fn update_providers_fee_rate(&mut self, new_providers_fee_rate_basis_points: u16) -> Result<()> {
+        require!(new_providers_fee_rate_basis_points + self.protocol_fee_rate_basis_points <= 10000, ErrorCode::ConfigFeeRateExceeded);
+        self.providers_fee_rate_basis_points = new_providers_fee_rate_basis_points;
+        Ok(())
+    }
+
+
+    pub(crate) fn update_protocol_fee_rate(&mut self, new_protocol_fee_rate_basis_points: u16) -> Result<()> {
+        require!(new_protocol_fee_rate_basis_points + self.providers_fee_rate_basis_points <= 10000, ErrorCode::ConfigFeeRateExceeded);
+        self.protocol_fee_rate_basis_points = new_protocol_fee_rate_basis_points;
+        Ok(())
+    }
+
+    #[inline]
+    pub fn fee_authority(&self) -> &Pubkey {
+        &self.fee_authority
+    }
+
+    #[inline]
+    pub fn bump(&self) -> u8 {
+        self.bump
+    }
+
+    #[inline]
+    pub fn providers_fee_rate_basis_points(&self) -> u16 {
+        self.providers_fee_rate_basis_points
+    }
+    #[inline]
+    pub fn protocol_fee_rate_basis_points(&self) -> u16 {
+        self.protocol_fee_rate_basis_points
     }
 }
 

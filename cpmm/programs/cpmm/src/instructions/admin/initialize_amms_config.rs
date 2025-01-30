@@ -6,20 +6,20 @@ use crate::constants::ANCHOR_DISCRIMINATOR;
 pub struct InitializeAmmsConfig<'info> {
     #[account(
         mut,
-        constraint = (authority.key() == amms_configs_manager.authority || authority.key() == amms_configs_manager.head_authority)
+        constraint = (authority.key() == amms_configs_manager.authority().key() || authority.key() == amms_configs_manager.head_authority().key())
     )]
     authority: Signer<'info>,
     #[account(
         mut,
         seeds = [AmmsConfigsManager::SEED],
-        bump = amms_configs_manager.bump
+        bump = amms_configs_manager.bump()
     )]
     amms_configs_manager: Account<'info, AmmsConfigsManager>,
     #[account(
         init,
         payer = authority,
         space = ANCHOR_DISCRIMINATOR + AmmsConfig::INIT_SPACE,
-        seeds = [AmmsConfig::SEED, amms_configs_manager.configs_count.to_le_bytes().as_ref()],
+        seeds = [AmmsConfig::SEED, amms_configs_manager.configs_count().to_le_bytes().as_ref()],
         bump
     )]
     amms_config: Account<'info, AmmsConfig>,
@@ -34,7 +34,7 @@ pub(crate) fn handler(ctx: Context<InitializeAmmsConfig>, protocol_fee_rate_basi
         ctx.accounts.fee_authority.key(),
         protocol_fee_rate_basis_points,
         providers_fee_rate_basis_points,
-        ctx.accounts.amms_configs_manager.configs_count,
+        ctx.accounts.amms_configs_manager.configs_count(),
         ctx.bumps.amms_config
     )?;
     ctx.accounts.amms_configs_manager.increment_configs_count();

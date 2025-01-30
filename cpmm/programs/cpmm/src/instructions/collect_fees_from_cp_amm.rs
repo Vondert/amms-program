@@ -34,9 +34,9 @@ pub struct CollectFeesFromCpAmm<'info> {
     pub fee_authority_quote_account: Box<InterfaceAccount<'info, TokenAccount>>,
     
     #[account(
-        constraint = amms_config.fee_authority.key() == fee_authority.key(),
+        constraint = amms_config.fee_authority().key() == fee_authority.key(),
         seeds = [AmmsConfig::SEED, amms_config.id.to_le_bytes().as_ref()],
-        bump = amms_config.bump
+        bump = amms_config.bump()
     )]
     pub amms_config: Account<'info, AmmsConfig>,
 
@@ -47,7 +47,9 @@ pub struct CollectFeesFromCpAmm<'info> {
         constraint = base_mint.key() == cp_amm.base_mint().key(),
         constraint = quote_mint.key() == cp_amm.quote_mint().key(),
         constraint = cp_amm_base_vault.key() == cp_amm.base_vault().key(),
-        constraint = cp_amm_quote_vault.key() == cp_amm.quote_vault().key()
+        constraint = cp_amm_quote_vault.key() == cp_amm.quote_vault().key(),
+        seeds = [CpAmm::SEED, cp_amm.lp_mint.as_ref()],
+        bump = cp_amm.bump()
     )]
     pub cp_amm: Box<Account<'info, CpAmm>>,
 

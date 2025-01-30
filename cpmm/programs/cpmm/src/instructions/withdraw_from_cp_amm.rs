@@ -38,7 +38,7 @@ pub struct WithdrawFromCpAmm<'info>{
 
     #[account(
         seeds = [AmmsConfig::SEED, amms_config.id.to_le_bytes().as_ref()],
-        bump = amms_config.bump
+        bump = amms_config.bump()
     )]
     pub amms_config: Box<Account<'info, AmmsConfig>>,
 
@@ -46,11 +46,12 @@ pub struct WithdrawFromCpAmm<'info>{
         mut,
         constraint = cp_amm.is_launched(),
         constraint = amms_config.key() == cp_amm.amms_config().key(),
+        constraint = lp_mint.key() == cp_amm.lp_mint,
         constraint = base_mint.key() == cp_amm.base_mint().key(),
         constraint = quote_mint.key() == cp_amm.quote_mint().key(),
         constraint = cp_amm_base_vault.key() == cp_amm.base_vault().key(),
         constraint = cp_amm_quote_vault.key() == cp_amm.quote_vault().key(),
-        seeds = [CpAmm::SEED, lp_mint.key().as_ref()],
+        seeds = [CpAmm::SEED, cp_amm.lp_mint.as_ref()],
         bump = cp_amm.bump()
     )]
     pub cp_amm: Box<Account<'info, CpAmm>>,

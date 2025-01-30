@@ -56,7 +56,7 @@ pub struct CpAmm {
     quote_mint: Pubkey, // 32 bytes
 
     /// Public key of the LP token's mint.
-    lp_mint: Pubkey, // 32 bytes
+    pub lp_mint: Pubkey, // 32 bytes
 
     /// Public key of the vault holding the base tokens.
     base_vault: Pubkey, // 32 bytes
@@ -86,46 +86,47 @@ impl CpAmm {
     }
 
     /// Checks if the AMM has been initialized.
+    #[inline]
     pub fn is_initialized(&self) -> bool {
         self.is_initialized
     }
 
     /// Checks if the AMM has been launched and is active.
+    #[inline]
     pub fn is_launched(&self) -> bool {
         self.is_launched
     }
 
     /// Returns the canonical bump value for the PDA.
+    #[inline]
     pub fn bump(&self) -> u8 {
         self.bump[0]
     }
 
     /// Returns the public key of the base token's mint.
+    #[inline]
     pub fn base_mint(&self) -> &Pubkey {
         &self.base_mint
     }
 
     /// Returns the public key of the quote token's mint.
-    pub fn quote_mint(&self) -> &Pubkey {
-        &self.quote_mint
-    }
-
-    /// Returns the public key of the LP token's mint.
-    pub fn lp_mint(&self) -> &Pubkey {
-        &self.lp_mint
-    }
+    #[inline]
+    pub fn quote_mint(&self) -> &Pubkey { &self.quote_mint }
 
     /// Returns the public key of the vault holding base tokens.
+    #[inline]
     pub fn base_vault(&self) -> &Pubkey {
         &self.base_vault
     }
 
     /// Returns the public key of the vault holding quote tokens.
+    #[inline]
     pub fn quote_vault(&self) -> &Pubkey {
         &self.quote_vault
     }
 
     /// Returns the public key of the associated `AmmsConfig` account.
+    #[inline]
     pub fn amms_config(&self) -> &Pubkey {
         &self.amms_config
     }
@@ -189,6 +190,7 @@ impl CpAmm {
     /// # Returns
     /// - `Ok(())` if the state is valid.
     /// - `Err(ErrorCode)` if any of the checks fail.
+    #[inline]
     fn check_state(&self) -> Result<()> {
         require!(self.is_launched, ErrorCode::CpAmmNotLaunched);
         require!(self.quote_liquidity > 0, ErrorCode::BaseLiquidityIsZero);
@@ -358,6 +360,7 @@ impl CpAmm {
     /// # Returns
     /// - `Ok(CollectFeesPayload)`: Contains the protocol fees available for redemption for both base and quote tokens.
     /// - `Err(ErrorCode::ProvidersFeesIsZero)`: If both `protocol_base_fees_to_redeem` and `protocol_quote_fees_to_redeem` are zero, meaning no fees are available to collect.
+    #[inline]
     pub fn get_collect_fees_payload(&self) -> Result<CollectFeesPayload>{
         require!(self.protocol_base_fees_to_redeem > 0 || self.protocol_quote_fees_to_redeem > 0, ErrorCode::ProvidersFeesIsZero);
         Ok(CollectFeesPayload::new(
@@ -767,7 +770,7 @@ mod cp_amm_tests {
         assert_eq!(amm.bump(), 253);
         assert_eq!(amm.base_mint(), &default_pubkey);
         assert_eq!(amm.quote_mint(), &default_pubkey);
-        assert_eq!(amm.lp_mint(), &default_pubkey);
+        assert_eq!(amm.lp_mint, default_pubkey);
         assert_eq!(amm.base_vault(), &default_pubkey);
         assert_eq!(amm.quote_vault(), &default_pubkey);
         assert_eq!(amm.amms_config(), &default_pubkey);

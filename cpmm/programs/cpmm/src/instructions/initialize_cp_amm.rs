@@ -36,9 +36,9 @@ pub struct InitializeCpAmm<'info> {
     pub lp_mint: Box<Account<'info, Mint>>,
     
     #[account(
-        constraint = amms_config.fee_authority.key() == fee_authority.key(),
+        constraint = amms_config.fee_authority().key() == fee_authority.key(),
         seeds = [AmmsConfig::SEED, amms_config.id.to_le_bytes().as_ref()],
-        bump = amms_config.bump
+        bump = amms_config.bump()
     )]
     pub amms_config: Box<Account<'info, AmmsConfig>>,
     

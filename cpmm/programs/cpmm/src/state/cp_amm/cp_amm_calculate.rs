@@ -140,6 +140,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     /// # Returns
     /// - `Some(u64)` with the opposite liquidity value.
     /// - `None` if the result is zero.
+    #[inline]
     fn calculate_opposite_liquidity(&self, x_liquidity: u64) -> Option<u64> {
         let constant_product = self.constant_product_sqrt().square_as_u128();
         let opposite_liquidity = (constant_product / x_liquidity as u128) as u64;
@@ -157,6 +158,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     ///
     /// # Returns
     /// - A `u64` representing the **calculated fee amount**.
+    #[inline]
     fn calculate_fee_amount(swap_amount: u64, fee_basis_points: u16) -> u64 {
         ((swap_amount as u128) * (fee_basis_points as u128) / Self::FEE_MAX_BASIS_POINTS) as u64
     }
@@ -171,6 +173,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     /// # Returns
     /// - `Ok(())` if the swap result is within the allowed slippage.
     /// - `Err(ErrorCode)` if the result exceeds the slippage tolerance.
+    #[inline]
     fn check_swap_result(swap_result: u64, estimated_swap_result: u64, allowed_slippage: u64) -> Result<()> {
         require!(swap_result > 0, ErrorCode::SwapResultIsZero);
         require!(swap_result.abs_diff(estimated_swap_result) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
@@ -186,6 +189,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     /// # Returns
     /// - `Some(Q64_128)` with the ratio square root.
     /// - `None` if the ratio is zero.
+    #[inline]
     fn calculate_base_quote_ratio_sqrt(base_liquidity: u64, quote_liquidity: u64) -> Option<Q64_128> {
         let ratio = Q64_128::checked_div_sqrt(Q64_128::from_u64(base_liquidity), Q64_128::from_u64(quote_liquidity))?;
         if ratio.is_zero() {
@@ -203,6 +207,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     /// # Returns
     /// - `Some(Q64_128)` with the square root of the constant product.
     /// - `None` if the product is zero.
+    #[inline]
     fn calculate_constant_product_sqrt(base_liquidity: u64, quote_liquidity: u64) -> Option<Q64_128> {
         let constant_product_sqrt = Q64_128::sqrt_from_u128(base_liquidity as u128 * quote_liquidity as u128);
         if constant_product_sqrt.is_zero() {
