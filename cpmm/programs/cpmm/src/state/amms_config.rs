@@ -62,33 +62,76 @@ impl AmmsConfig {
     }
 
 
+    /// Updates the fee rate for liquidity providers.
+    ///
+    /// Ensures that the sum of the updated `providers_fee_rate_basis_points` and
+    /// the existing `protocol_fee_rate_basis_points` does not exceed 10,000 basis points (100%).
+    ///
+    /// # Parameters
+    /// - `new_providers_fee_rate_basis_points`: The updated fee rate for liquidity providers,
+    ///   measured in basis points.
+    ///
+    /// # Errors
+    /// - Returns `ErrorCode::ConfigFeeRateExceeded` if the total fee rate exceeds 100%.
     pub(crate) fn update_providers_fee_rate(&mut self, new_providers_fee_rate_basis_points: u16) -> Result<()> {
-        require!(new_providers_fee_rate_basis_points + self.protocol_fee_rate_basis_points <= 10000, ErrorCode::ConfigFeeRateExceeded);
+        require!(
+            new_providers_fee_rate_basis_points + self.protocol_fee_rate_basis_points <= 10000,
+            ErrorCode::ConfigFeeRateExceeded
+        );
         self.providers_fee_rate_basis_points = new_providers_fee_rate_basis_points;
         Ok(())
     }
 
-
+    /// Updates the protocol fee rate.
+    ///
+    /// Ensures that the sum of the updated `protocol_fee_rate_basis_points` and
+    /// the existing `providers_fee_rate_basis_points` does not exceed 10,000 basis points (100%).
+    ///
+    /// # Parameters
+    /// - `new_protocol_fee_rate_basis_points`: The updated protocol fee rate, measured in basis points.
+    ///
+    /// # Errors
+    /// - Returns `ErrorCode::ConfigFeeRateExceeded` if the total fee rate exceeds 100%.
     pub(crate) fn update_protocol_fee_rate(&mut self, new_protocol_fee_rate_basis_points: u16) -> Result<()> {
-        require!(new_protocol_fee_rate_basis_points + self.providers_fee_rate_basis_points <= 10000, ErrorCode::ConfigFeeRateExceeded);
+        require!(
+            new_protocol_fee_rate_basis_points + self.providers_fee_rate_basis_points <= 10000,
+            ErrorCode::ConfigFeeRateExceeded
+        );
         self.protocol_fee_rate_basis_points = new_protocol_fee_rate_basis_points;
         Ok(())
     }
 
+    /// Retrieves the public key of the current fee authority.
+    ///
+    /// # Returns
+    /// - A reference to the `Pubkey` of the fee authority.
     #[inline]
     pub fn fee_authority(&self) -> &Pubkey {
         &self.fee_authority
     }
 
+    /// Retrieves the PDA bump seed associated with this configuration.
+    ///
+    /// # Returns
+    /// - The `u8` bump seed.
     #[inline]
     pub fn bump(&self) -> u8 {
         self.bump
     }
 
+    /// Retrieves the fee rate for liquidity providers.
+    ///
+    /// # Returns
+    /// - The `u16` fee rate for providers, measured in basis points.
     #[inline]
     pub fn providers_fee_rate_basis_points(&self) -> u16 {
         self.providers_fee_rate_basis_points
     }
+
+    /// Retrieves the protocol fee rate.
+    ///
+    /// # Returns
+    /// - The `u16` protocol fee rate, measured in basis points.
     #[inline]
     pub fn protocol_fee_rate_basis_points(&self) -> u16 {
         self.protocol_fee_rate_basis_points
@@ -125,6 +168,12 @@ mod amms_config_tests {
         assert_eq!(amms_config.fee_authority, fee_authority);
         assert_eq!(amms_config.protocol_fee_rate_basis_points, protocol_fee_rate_basis_points);
         assert_eq!(amms_config.providers_fee_rate_basis_points, providers_fee_rate_basis_points);
+
+        assert_eq!(amms_config.bump(), bump);
+        assert_eq!(amms_config.fee_authority().key(), fee_authority);
+        assert_eq!(amms_config.protocol_fee_rate_basis_points(), protocol_fee_rate_basis_points);
+        assert_eq!(amms_config.providers_fee_rate_basis_points(), providers_fee_rate_basis_points);
+
     }
 
 
@@ -142,6 +191,40 @@ mod amms_config_tests {
         let new_fee_authority = Pubkey::new_unique();
         amms_config.update_fee_authority(new_fee_authority);
         assert_eq!(amms_config.fee_authority, new_fee_authority);
+    }
+
+    /// Tests the `update_providers_fee_rate` method of the `AmmsConfig` struct.
+    #[test]
+    fn test_amms_config_update_providers_fee_rate() {
+        let mut amms_config = AmmsConfig {
+            bump: 42,
+            id: 42,
+            fee_authority: Pubkey::default(),
+            providers_fee_rate_basis_points: 300,
+            protocol_fee_rate_basis_points: 200,
+        };
+
+        let new_providers_fee_rate = 234;
+        amms_config.update_providers_fee_rate(new_providers_fee_rate).unwrap();
+        assert_eq!(amms_config.providers_fee_rate_basis_points, new_providers_fee_rate);
+        assert_eq!(amms_config.update_providers_fee_rate(9801).ok(), None);
+    }
+
+    /// Tests the `update_protocol_fee_rate` method of the `AmmsConfig` struct.
+    #[test]
+    fn test_amms_config_update_protocol_fee_rate() {
+        let mut amms_config = AmmsConfig {
+            bump: 42,
+            id: 42,
+            fee_authority: Pubkey::default(),
+            providers_fee_rate_basis_points: 300,
+            protocol_fee_rate_basis_points: 200,
+        };
+
+        let new_protocol_fee_rate = 234;
+        amms_config.update_protocol_fee_rate(new_protocol_fee_rate).unwrap();
+        assert_eq!(amms_config.protocol_fee_rate_basis_points, new_protocol_fee_rate);
+        assert_eq!(amms_config.update_protocol_fee_rate(9701).ok(), None);
     }
 
     /// Tests `AmmsConfig` account data layout.

@@ -34,7 +34,15 @@ pub mod cpmm {
     pub fn update_amms_config_fee_authority(ctx: Context<UpdateAmmsConfigFeeAuthority>) -> Result<()>{
         update_amms_config_fee_authority::handler(ctx)
     }
-    
+
+    pub fn update_amms_config_providers_fee_rate(ctx: Context<UpdateAmmsConfigProvidersFeeRate>, new_providers_fee_rate_basis_points: u16) -> Result<()>{
+        update_amms_config_providers_fee_rate::handler(ctx, new_providers_fee_rate_basis_points)
+    }
+
+    pub fn update_amms_config_protocol_fee_rate(ctx: Context<UpdateAmmsConfigProtocolFeeRate>, new_protocol_fee_rate_basis_points: u16) -> Result<()>{
+        update_amms_config_protocol_fee_rate::handler(ctx, new_protocol_fee_rate_basis_points)
+    }
+
     
     pub fn initialize_cp_amm(ctx: Context<InitializeCpAmm>) -> Result<()>{
         initialize_cp_amm::handler(ctx)

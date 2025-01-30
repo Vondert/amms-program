@@ -69,15 +69,38 @@ impl AmmsConfigsManager {
         self.configs_count = self.configs_count.checked_add(1).unwrap()
     }
 
+    /// Retrieves the public key of the head authority.
+    ///
+    /// # Returns
+    /// - A reference to the `Pubkey` representing the head authority.
+    #[inline]
     pub fn head_authority(&self) -> &Pubkey {
         &self.head_authority
     }
+
+    /// Retrieves the public key of the authority managing configurations.
+    ///
+    /// # Returns
+    /// - A reference to the `Pubkey` representing the authority.
+    #[inline]
     pub fn authority(&self) -> &Pubkey {
         &self.authority
     }
+
+    /// Retrieves the total number of AMM configurations managed by this account.
+    ///
+    /// # Returns
+    /// - A `u64` value representing the number of configurations.
+    #[inline]
     pub fn configs_count(&self) -> u64 {
         self.configs_count
     }
+
+    /// Retrieves the bump seed used for the account's PDA.
+    ///
+    /// # Returns
+    /// - A `u8` bump value ensuring the validity of the PDA.
+    #[inline]
     pub fn bump(&self) -> u8 {
         self.bump
     }
@@ -109,6 +132,11 @@ mod amms_configs_manager_tests {
         assert_eq!(manager.head_authority, head_authority);
         assert_eq!(manager.configs_count, 0);
         assert_eq!(manager.bump, bump);
+
+        assert_eq!(manager.authority().key(), authority);
+        assert_eq!(manager.head_authority().key(), head_authority);
+        assert_eq!(manager.configs_count(), 0);
+        assert_eq!(manager.bump(), bump);
     }
     
     /// Tests the `update_authority` method of the `AmmsConfigsManager` struct.
