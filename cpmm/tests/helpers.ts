@@ -27,7 +27,7 @@ export type RpcClient = {
     rpc: Rpc<SolanaRpcApi>;
     rpcSubscriptions: RpcSubscriptions<SolanaRpcSubscriptionsApi>;
 };
-export const getTestUser = async (rpcClient: RpcClient, airdrop_amount: number): Promise<KeyPairSigner> =>{
+export const createTestUser = async (rpcClient: RpcClient, airdrop_amount: number): Promise<KeyPairSigner> =>{
     const user = await generateKeyPairSigner();
     console.log("Generated user address:", user.address);
 
@@ -82,9 +82,9 @@ export const createCpmmTestingEnvironment = async (): Promise<CpmmTestingEnviron
     const wsEndpoint = 'ws://127.0.0.1:8900';
     const rpcClient: RpcClient = {rpc: createSolanaRpc(httpEndpoint), rpcSubscriptions: createSolanaRpcSubscriptions(wsEndpoint)}
     const owner = await createKeyPairSignerFromBytes(Buffer.from(JSON.parse(fs.readFileSync("../owner.json", 'utf8'))));
-    const headAuthority = await getTestUser(rpcClient, 100);
-    const ammsConfigsManagerAuthority = await getTestUser(rpcClient, 100);
-    const user = await getTestUser(rpcClient, 100);
+    const headAuthority = await createTestUser(rpcClient, 100);
+    const ammsConfigsManagerAuthority = await createTestUser(rpcClient, 100);
+    const user = await createTestUser(rpcClient, 100);
     const rent = address("SysvarRent111111111111111111111111111111111");
     return {rpcClient, headAuthority, owner, program, rent, ammsConfigsManagerAuthority, user};
 };

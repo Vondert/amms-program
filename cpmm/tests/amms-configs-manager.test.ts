@@ -18,6 +18,9 @@ import {
 export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsConfigsManagerAddress: ProgramDerivedAddress) =>{
     describe("\nAmmsConfigsManager tests", () =>{
         const {program, rpcClient, rent, headAuthority, owner, ammsConfigsManagerAuthority, user} = cpmmTestingEnvironment;
+
+        /// Initialization
+
         it("Unauthorized attempt to initialize AmmsConfigsManager should fail", async () => {
             const input: InitializeAmmsConfigsManagerInput = {
                 signer: user,
@@ -100,6 +103,8 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
             }).catch();
         })
 
+        // Authority update
+
         it("Unauthorized attempt to update AmmsConfigsManager authority should fail", async () => {
             const input: UpdateAmmsConfigsManagerAuthorityInput = {
                 authority: user,
@@ -165,6 +170,8 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
             assert.strictEqual(ammsConfigsManagerAccountAfter.data.configsCount, ammsConfigsManagerAccountBefore.data.configsCount, "Configs count should remain unchanged after update");
             assert.strictEqual(ammsConfigsManagerAccountAfter.data.bump, ammsConfigsManagerAccountBefore.data.bump, "Bump value should remain the same");
         })
+
+        /// Head authority update
 
         it("Unauthorized attempt to update AmmsConfigsManager head authority should fail", async () => {
             const input: UpdateAmmsConfigsManagerHeadAuthorityInput = {

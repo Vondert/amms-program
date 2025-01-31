@@ -7,7 +7,7 @@ import {
     ProgramDerivedAddress
 } from "@solana/web3.js";
 import {before, describe} from "mocha";
-import {CpmmTestingEnvironment, createTransaction, getTestUser, signAndSendTransaction} from "./helpers";
+import {CpmmTestingEnvironment, createTransaction, createTestUser, signAndSendTransaction} from "./helpers";
 import {
     getInitializeAmmsConfigInstruction,
     getUpdateAmmsConfigFeeAuthorityInstruction,
@@ -24,9 +24,16 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
     describe("\nAmmsConfig tests", () =>{
         const {program, rpcClient, rent, headAuthority, owner, ammsConfigsManagerAuthority, user} = cpmmTestingEnvironment;
         let feeAuthority: KeyPairSigner;
+        let malwareAmmsConfigsManagerAddress: ProgramDerivedAddress;
         before(async () =>{
-            feeAuthority = await getTestUser(cpmmTestingEnvironment.rpcClient, 100);
+            feeAuthority = await createTestUser(rpcClient, 100);
+            malwareAmmsConfigsManagerAddress = await getProgramDerivedAddress({
+                programAddress: program.CPMM_PROGRAM_ADDRESS,
+                seeds: ["ammss_configs_manager"]
+            });
         })
+
+        /// Initialization
 
         it("Unauthorized attempt to initialize AmmsConfig should fail", async () => {
             const input: InitializeAmmsConfigInput = {
@@ -68,11 +75,7 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
             ).then(() => assert.fail("Expected failure of AmmsConfig initialization with exceeded fees")).catch();
         })
 
-        it("Initialization of AmmsConfig should fail with malware AmmsConfigManager", async () => {
-            const malwareAmmsConfigsManagerAddress = await getProgramDerivedAddress({
-                programAddress: cpmmTestingEnvironment.program.CPMM_PROGRAM_ADDRESS,
-                seeds: ["ammss_configs_manager"]
-            });
+        it("Initialization of AmmsConfig with malware AmmsConfigManager should fail", async () => {
 
             const input: InitializeAmmsConfigInput = {
                 authority: user,
@@ -193,6 +196,8 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
             ).then(() => assert.fail("Expected failure of reinitialization AmmsConfig")).catch();
         })
 
+        /// Fee authority update
+
         it("Unauthorized attempt to update AmmsConfig fee authority should fail", async () => {
             const input: UpdateAmmsConfigFeeAuthorityInput = {
                 authority: user,
@@ -207,6 +212,22 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
                 await createTransaction(rpcClient, owner, [ix]),
                 (tx) => signAndSendTransaction(rpcClient, tx)
             ).then(() => assert.fail("Expected failure of unauthorized update of AmmsConfig fee authority")).catch();
+        })
+
+        it("Update of AmmsConfig fee authority with malware AmmsConfigManager should fail", async () => {
+            const input: UpdateAmmsConfigFeeAuthorityInput = {
+                authority: headAuthority,
+                ammsConfigsManager: malwareAmmsConfigsManagerAddress[0],
+                ammsConfig: ammsConfigAddress[0],
+                newFeeAuthority: malwareAmmsConfigsManagerAddress[0]
+            };
+
+            const ix = getUpdateAmmsConfigFeeAuthorityInstruction(input);
+
+            pipe(
+                await createTransaction(rpcClient, owner, [ix]),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            ).then(() => assert.fail("Expected failure of update of AmmsConfig fee authority with malware AmmsConfigManager")).catch();
         })
 
         it("Update AmmsConfig fee authority by head authority", async () => {
@@ -263,6 +284,8 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
             assert.strictEqual(ammsConfigAccountAfter.data.bump,  ammsConfigAccountBefore.data.bump, "Bump should remain unchanged");
         })
 
+        /// Protocol fee rate update
+
         it("Unauthorized attempt to update AmmsConfig protocol fee rate should fail", async () => {
             const input: UpdateAmmsConfigProtocolFeeRateInput = {
                 authority: user,
@@ -277,6 +300,22 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
                 await createTransaction(rpcClient, owner, [ix]),
                 (tx) => signAndSendTransaction(rpcClient, tx)
             ).then(() => assert.fail("Expected failure of unauthorized update of AmmsConfig protocol fee rate")).catch();
+        })
+
+        it("Update of AmmsConfig fee authority with malware AmmsConfigManager should fail", async () => {
+            const input: UpdateAmmsConfigProtocolFeeRateInput = {
+                authority: headAuthority,
+                ammsConfigsManager: malwareAmmsConfigsManagerAddress[0],
+                ammsConfig: ammsConfigAddress[0],
+                newProtocolFeeRateBasisPoints: 312
+            };
+
+            const ix = getUpdateAmmsConfigProtocolFeeRateInstruction(input);
+
+            pipe(
+                await createTransaction(rpcClient, owner, [ix]),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            ).then(() => assert.fail("Expected failure of update of AmmsConfig protocol fee rate with malware AmmsConfigManager")).catch();
         })
 
         it("Update AmmsConfig protocol fee rate by head authority", async () => {
@@ -353,6 +392,8 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
             ).then(() => assert.fail("Expected failure of update of AmmsConfig protocol fee rate to exceeding fee")).catch();
         })
 
+        /// Providers fee rate update
+
         it("Unauthorized attempt to update AmmsConfig providers fee rate should fail", async () => {
             const input: UpdateAmmsConfigProvidersFeeRateInput = {
                 authority: user,
@@ -367,6 +408,22 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
                 await createTransaction(rpcClient, owner, [ix]),
                 (tx) => signAndSendTransaction(rpcClient, tx)
             ).then(() => assert.fail("Expected failure of unauthorized update of AmmsConfig providers fee rate")).catch();
+        })
+
+        it("Update of AmmsConfig fee authority with malware AmmsConfigManager should fail", async () => {
+            const input: UpdateAmmsConfigProvidersFeeRateInput = {
+                authority: headAuthority,
+                ammsConfigsManager: malwareAmmsConfigsManagerAddress[0],
+                ammsConfig: ammsConfigAddress[0],
+                newProvidersFeeRateBasisPoints: 312
+            };
+
+            const ix = getUpdateAmmsConfigProvidersFeeRateInstruction(input);
+
+            pipe(
+                await createTransaction(rpcClient, owner, [ix]),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            ).then(() => assert.fail("Expected failure of update of AmmsConfig providers fee rate with malware AmmsConfigManager")).catch();
         })
 
         it("Update AmmsConfig providers fee rate by head authority", async () => {
