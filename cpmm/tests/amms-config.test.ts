@@ -351,7 +351,7 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
             const ammsConfigAccountBefore = await program.fetchAmmsConfig(rpcClient.rpc, ammsConfigAddress[0]);
             assert.ok(ammsConfigAccountBefore, "AmmsConfig doesn't exist");
 
-            const newProtocolFeeRateBasisPoints = 1657;
+            const newProtocolFeeRateBasisPoints = 100;
 
             const input: UpdateAmmsConfigProtocolFeeRateInput = {
                 authority: ammsConfigsManagerAuthority,
@@ -459,7 +459,7 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
             const ammsConfigAccountBefore = await program.fetchAmmsConfig(rpcClient.rpc, ammsConfigAddress[0]);
             assert.ok(ammsConfigAccountBefore, "AmmsConfig doesn't exist");
 
-            const newProvidersFeeRateBasisPoints = 1657;
+            const newProvidersFeeRateBasisPoints = 400;
 
             const input: UpdateAmmsConfigProvidersFeeRateInput = {
                 authority: ammsConfigsManagerAuthority,
@@ -489,7 +489,7 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
                 authority: headAuthority,
                 ammsConfigsManager: ammsConfigsManagerAddress[0],
                 ammsConfig: ammsConfigAddress[0],
-                newProvidersFeeRateBasisPoints: 8344
+                newProvidersFeeRateBasisPoints: 9901
             };
 
             const ix = getUpdateAmmsConfigProvidersFeeRateInstruction(input);

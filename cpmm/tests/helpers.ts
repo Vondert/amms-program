@@ -21,7 +21,7 @@ import {
 import * as program from "../clients/js/src/generated";
 import fs from "node:fs";
 
-const LAMPORTS_PER_SOL = BigInt(1_000_000_000);
+const LAMPORTS_PER_SOL = 1_000_000_000;
 
 export type RpcClient = {
     rpc: Rpc<SolanaRpcApi>;
@@ -34,7 +34,7 @@ export const createTestUser = async (rpcClient: RpcClient, airdrop_amount: numbe
     const airdrop = airdropFactory(rpcClient);
     await airdrop({
         commitment: 'processed',
-        lamports: lamports(LAMPORTS_PER_SOL * BigInt(airdrop_amount)),
+        lamports: lamports(BigInt(LAMPORTS_PER_SOL * airdrop_amount)),
         recipientAddress: user.address
     });
 

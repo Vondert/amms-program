@@ -32,7 +32,6 @@ pub struct InitializeCpAmm<'info> {
         mint::authority = cp_amm,
         mint::token_program = token_program
     )]
-    /// Check freeze authority on client
     pub lp_mint: Box<Account<'info, Mint>>,
     
     #[account(
