@@ -1,8 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::Token;
-use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::{Mint, TokenAccount};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use crate::state::AmmsConfig;
 use crate::state::cp_amm::CpAmm;
 use crate::utils::token_instructions::TransferTokensInstruction;
@@ -22,6 +20,7 @@ pub struct CollectFeesFromCpAmm<'info> {
         payer = signer,
         associated_token::mint = base_mint,
         associated_token::authority = fee_authority,
+        associated_token::token_program = base_token_program
     )]
     pub fee_authority_base_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
@@ -30,6 +29,7 @@ pub struct CollectFeesFromCpAmm<'info> {
         payer = signer,
         associated_token::mint = quote_mint,
         associated_token::authority = fee_authority,
+        associated_token::token_program = quote_token_program
     )]
     pub fee_authority_quote_account: Box<InterfaceAccount<'info, TokenAccount>>,
     
@@ -60,8 +60,8 @@ pub struct CollectFeesFromCpAmm<'info> {
     pub cp_amm_quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub associated_token_program: Program<'info, AssociatedToken>,
-    pub token_program: Program<'info, Token>,
-    pub token_2022_program: Program<'info, Token2022>,
+    pub base_token_program: Interface<'info, TokenInterface>,
+    pub quote_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
 
@@ -73,8 +73,7 @@ impl<'info> CollectFeesFromCpAmm<'info> {
             &self.cp_amm_base_vault,
             self.cp_amm.to_account_info(),
             &self.fee_authority_base_account,
-            &self.token_program,
-            &self.token_2022_program
+            &self.base_token_program
         )
     }
     fn get_collect_quote_fees_transfer_instruction(&self, quote_fees: u64) -> Result<TransferTokensInstruction<'_, '_, '_, 'info>>{
@@ -84,8 +83,7 @@ impl<'info> CollectFeesFromCpAmm<'info> {
             &self.fee_authority_quote_account,
             self.cp_amm.to_account_info(),
             &self.cp_amm_quote_vault,
-            &self.token_program,
-            &self.token_2022_program
+            &self.quote_token_program
         )
     }
 }

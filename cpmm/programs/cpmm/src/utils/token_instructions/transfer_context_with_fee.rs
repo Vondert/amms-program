@@ -1,8 +1,7 @@
 use anchor_lang::context::CpiContext;
-use anchor_lang::prelude::{AccountInfo, InterfaceAccount, Program};
+use anchor_lang::prelude::{AccountInfo, Interface, InterfaceAccount};
 use anchor_lang::ToAccountInfo;
-use anchor_spl::token_2022::{Token2022};
-use anchor_spl::token_interface::{Mint, TokenAccount};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use anchor_spl::token_2022_extensions::TransferCheckedWithFee;
 
 /// Represents the context for a token transfer that includes a transfer fee.
@@ -48,12 +47,12 @@ impl<'at, 'bt, 'ct, 'info> TransferContextWithFee<'at, 'bt, 'ct, 'info> {
         from: &InterfaceAccount<'info, TokenAccount>,
         from_authority: AccountInfo<'info>,
         to: &InterfaceAccount<'info, TokenAccount>,
-        token_2022_program: &Program<'info, Token2022>,
+        token_program: &Interface<'info, TokenInterface>,
     ) -> Self {
         let cpi_context = CpiContext::new(
-            token_2022_program.to_account_info(),
+            token_program.to_account_info(),
             TransferCheckedWithFee {
-                token_program_id: token_2022_program.to_account_info(),
+                token_program_id: token_program.to_account_info(),
                 source: from.to_account_info(),
                 mint: mint.to_account_info(),
                 destination: to.to_account_info(),

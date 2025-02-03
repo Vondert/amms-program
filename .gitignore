@@ -12,3 +12,4 @@ cpmm/Cargo.lock
 .idea
 /cpmm/programs/cpmm/proptest-regressions/
 /owner.json
+/cpmm/clients/

@@ -426,6 +426,7 @@ impl CpAmm {
     /// # Returns
     /// - No return value. Modifies the internal state of the AMM.
     pub(crate) fn launch(&mut self, launch_payload: LaunchPayload, base_vault: &InterfaceAccount<token_interface::TokenAccount>, quote_vault: &InterfaceAccount<token_interface::TokenAccount>, locked_lp_vault: &Account<TokenAccount>) -> (){
+        self.is_launched = true;
         self.base_liquidity = launch_payload.base_liquidity;
         self.quote_liquidity = launch_payload.quote_liquidity;
         self.initial_locked_liquidity = launch_payload.initial_locked_liquidity;

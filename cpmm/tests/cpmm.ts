@@ -1,15 +1,16 @@
 import {ammsConfigsManagerTests} from "./amms-configs-manager.test";
 import {
-    getProgramDerivedAddress,
     generateKeyPairSigner,
     KeyPairSigner,
-    getU64Encoder,
-    Endian,
-    getAddressEncoder,
     ProgramDerivedAddress
 } from "@solana/web3.js";
 import {before} from "mocha";
-import {CpmmTestingEnvironment, createCpmmTestingEnvironment} from "./helpers";
+import {
+    CpmmTestingEnvironment,
+    createCpmmTestingEnvironment,
+    getAmmsConfigPDA,
+    getAmmsConfigsManagerPDA, getCpAmmPDA
+} from "./helpers";
 import {ammsConfigTests} from "./amms-config.test";
 import {cpAmmTests} from "./cp-amm.test";
 
@@ -24,20 +25,20 @@ before(async () =>{
     const programAddress = cpmmTestingEnvironment.program.CPMM_PROGRAM_ADDRESS;
     console.log("Program Address:", programAddress);
 
-    ammsConfigsManagerAddress = await getProgramDerivedAddress({programAddress, seeds: ["amms_configs_manager"]});
+    ammsConfigsManagerAddress = await getAmmsConfigsManagerPDA();
     console.log("AMMs Configs Manager PDA:", ammsConfigsManagerAddress);
 
-    ammsConfigAddress = await getProgramDerivedAddress({programAddress, seeds: ["amms_config", getU64Encoder({ endian: Endian.Little }).encode(0)]});
+    ammsConfigAddress = await getAmmsConfigPDA(BigInt(0));
     console.log("AMMs Config PDA:", ammsConfigAddress);
 
     lpMint = await generateKeyPairSigner();
     console.log("LP Mint Address:", lpMint.address);
 
-    cpAmmAddress = await getProgramDerivedAddress({programAddress, seeds: ["cp_amm", getAddressEncoder().encode(lpMint.address)]});
+    cpAmmAddress = await getCpAmmPDA(lpMint.address);
     console.log("CP AMM PDA:", cpAmmAddress);
 })
 it("Cpmm program instructions tests", async () => {
     ammsConfigsManagerTests(cpmmTestingEnvironment, ammsConfigsManagerAddress);
     ammsConfigTests(cpmmTestingEnvironment, ammsConfigsManagerAddress, ammsConfigAddress);
-    cpAmmTests(cpmmTestingEnvironment, ammsConfigAddress, lpMint, cpAmmAddress);
+    cpAmmTests(cpmmTestingEnvironment, ammsConfigAddress);
 });

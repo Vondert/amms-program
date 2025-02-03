@@ -1,12 +1,36 @@
 import {
     Account,
-    generateKeyPairSigner, getAddressEncoder, getProgramDerivedAddress,
+    generateKeyPairSigner,
     KeyPairSigner, none,
     pipe,
     ProgramDerivedAddress, some
 } from "@solana/web3.js";
+import {SYSTEM_PROGRAM_ADDRESS} from "@solana-program/system";
+import {
+    ASSOCIATED_TOKEN_PROGRAM_ADDRESS, fetchMint, findAssociatedTokenPda,
+    Mint as TokenMint,
+    Token as TokenAccount,
+    TOKEN_PROGRAM_ADDRESS
+} from "@solana-program/token";
+import {
+    Mint as Token22Mint,
+    Token as Token22Account
+} from "@solana-program/token-2022";
+import {assert} from "chai";
 import {before, describe} from "mocha";
-import {CpmmTestingEnvironment, createTestUser, createTransaction, signAndSendTransaction} from "./helpers";
+import {
+    fetchCpAmm,
+    getInitializeCpAmmInstruction, getLaunchCpAmmInstruction,
+    InitializeCpAmmInput,
+    LaunchCpAmmInput
+} from "../clients/js/src/generated";
+import {
+    CpmmTestingEnvironment,
+    createTestUser,
+    createTransaction, createTransactionWithComputeUnits,
+    getCpAmmPDA, getToken22PDA, getTokenPDA,
+    signAndSendTransaction
+} from "./helpers";
 import {
     createAtaWithTokens, createAtaWithTokens22,
     createToken22Mint,
@@ -14,28 +38,46 @@ import {
     createToken22MintWithTransferFee,
     createTokenMint
 } from "./tokens-helpers";
-import {
-    ASSOCIATED_TOKEN_PROGRAM_ADDRESS, fetchMint, findAssociatedTokenPda,
-    Mint as TokenMint,
-    Token as TokenAccount,
-    TOKEN_PROGRAM_ADDRESS
-} from "@solana-program/token";
-import {Mint as Token22Mint, Token as Token22Account} from "@solana-program/token-2022";
-import {
-    fetchCpAmm,
-    getInitializeCpAmmInstruction,
-    InitializeCpAmmInput
-} from "../clients/js/src/generated";
-import {SYSTEM_PROGRAM_ADDRESS} from "@solana-program/system";
-import {assert} from "chai";
 
-export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsConfigAddress: ProgramDerivedAddress, lpMint: KeyPairSigner, cpAmm: ProgramDerivedAddress) =>{
+
+export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsConfigAddress: ProgramDerivedAddress) =>{
     describe("\nCpAmm tests", () =>{
-        const {program, rpcClient, rent, headAuthority, owner, user} = cpmmTestingEnvironment;
-
+        const {rpcClient, rent, headAuthority, owner, user} = cpmmTestingEnvironment;
         let generalUser: KeyPairSigner;
-        let userLpAta: ProgramDerivedAddress;
 
+        const TEST_CP_AMMS: {
+            lpMint1: KeyPairSigner,
+            cpAmm1: ProgramDerivedAddress,
+            baseVault1: ProgramDerivedAddress,
+            quoteVault1: ProgramDerivedAddress,
+            lpVault1: ProgramDerivedAddress,
+            lpMint2: KeyPairSigner,
+            cpAmm2: ProgramDerivedAddress,
+            baseVault2: ProgramDerivedAddress,
+            quoteVault2: ProgramDerivedAddress,
+            lpVault2: ProgramDerivedAddress,
+            lpMint3: KeyPairSigner,
+            cpAmm3: ProgramDerivedAddress,
+            baseVault3: ProgramDerivedAddress,
+            quoteVault3: ProgramDerivedAddress,
+            lpVault3: ProgramDerivedAddress
+        } = {
+            lpMint1: undefined,
+            cpAmm1: undefined,
+            baseVault1: undefined,
+            quoteVault1: undefined,
+            lpVault1: undefined,
+            lpMint2: undefined,
+            cpAmm2: undefined,
+            baseVault2: undefined,
+            quoteVault2: undefined,
+            lpVault2: undefined,
+            lpMint3: undefined,
+            cpAmm3: undefined,
+            baseVault3: undefined,
+            quoteVault3: undefined,
+            lpVault3: undefined,
+        };
         const TEST_MINTS: {
             validTokenMint1: Account<TokenMint>,
             validTokenMint2: Account<TokenMint>,
@@ -62,13 +104,19 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             validToken221: Account<Token22Account>,
             validToken222: Account<Token22Account>,
             transferFeeToken22: Account<Token22Account>,
+            lpToken1: ProgramDerivedAddress,
+            lpToken2: ProgramDerivedAddress,
+            lpToken3: ProgramDerivedAddress
         } = {
             validToken1: undefined,
             validToken2: undefined,
             validToken3: undefined,
             validToken221: undefined,
             validToken222: undefined,
-            transferFeeToken22: undefined
+            transferFeeToken22: undefined,
+            lpToken1: undefined,
+            lpToken2: undefined,
+            lpToken3: undefined
         };
         const GENERAL_USER_TOKEN_ACCOUNTS: {
             validToken1: Account<TokenAccount>,
@@ -77,22 +125,35 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             validToken221: Account<Token22Account>,
             validToken222: Account<Token22Account>,
             transferFeeToken22: Account<Token22Account>,
+            lpToken1: ProgramDerivedAddress,
+            lpToken2: ProgramDerivedAddress,
+            lpToken3: ProgramDerivedAddress
         } = {
             validToken1: undefined,
             validToken2: undefined,
             validToken3: undefined,
             validToken221: undefined,
             validToken222: undefined,
-            transferFeeToken22: undefined
+            transferFeeToken22: undefined,
+            lpToken1: undefined,
+            lpToken2: undefined,
+            lpToken3: undefined
         };
 
         before(async () =>{
             generalUser = await createTestUser(rpcClient, 100);
-            userLpAta = await findAssociatedTokenPda({
-                mint: lpMint.address,
-                owner: user.address,
-                tokenProgram: TOKEN_PROGRAM_ADDRESS,
-            });
+
+            [TEST_CP_AMMS.lpMint1, TEST_CP_AMMS.lpMint2, TEST_CP_AMMS.lpMint3] = await Promise.all([
+                generateKeyPairSigner(),
+                generateKeyPairSigner(),
+                generateKeyPairSigner()
+            ]);
+            [TEST_CP_AMMS.cpAmm1, TEST_CP_AMMS.cpAmm2, TEST_CP_AMMS.cpAmm3] = await Promise.all([
+                getCpAmmPDA(TEST_CP_AMMS.lpMint1.address),
+                getCpAmmPDA(TEST_CP_AMMS.lpMint2.address),
+                getCpAmmPDA(TEST_CP_AMMS.lpMint3.address)
+            ]);
+
             TEST_MINTS.validTokenMint1 = await createTokenMint(rpcClient, user, 6);
             TEST_MINTS.validTokenMint2 = await createTokenMint(rpcClient, user, 4);
             TEST_MINTS.validTokenMint3 = await createTokenMint(rpcClient, user, 9);
@@ -103,44 +164,53 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             TEST_MINTS.transferFeeToken2022Mint = await createToken22MintWithTransferFee(rpcClient, user, 2, 379, 10000);
             TEST_MINTS.permanentDelegateToken2022Mint = await createToken22MintWithPermanentDelegate(rpcClient, user, 0);
 
-            USER_TOKEN_ACCOUNTS.validToken1 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint1.address, user, user, BigInt(1_000_000_000));
-            USER_TOKEN_ACCOUNTS.validToken2 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint2.address, user, user, BigInt(1_000_000_000));
-            USER_TOKEN_ACCOUNTS.validToken3 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint3.address, user, user, BigInt(1_000_000_000));
+            [
+                TEST_CP_AMMS.baseVault1, TEST_CP_AMMS.baseVault2, TEST_CP_AMMS.baseVault3,
+                TEST_CP_AMMS.quoteVault1, TEST_CP_AMMS.quoteVault2, TEST_CP_AMMS.quoteVault3,
+                TEST_CP_AMMS.lpVault1, TEST_CP_AMMS.lpVault2, TEST_CP_AMMS.lpVault3,
+                USER_TOKEN_ACCOUNTS.lpToken1, USER_TOKEN_ACCOUNTS.lpToken2, USER_TOKEN_ACCOUNTS.lpToken3,
+                GENERAL_USER_TOKEN_ACCOUNTS.lpToken1, GENERAL_USER_TOKEN_ACCOUNTS.lpToken2, GENERAL_USER_TOKEN_ACCOUNTS.lpToken3,
+            ] = await Promise.all([
+                getTokenPDA(TEST_MINTS.validTokenMint1.address, TEST_CP_AMMS.cpAmm1[0]), getTokenPDA(TEST_MINTS.validTokenMint2.address, TEST_CP_AMMS.cpAmm2[0]), getTokenPDA(TEST_MINTS.validTokenMint2.address, TEST_CP_AMMS.cpAmm3[0]),
+                getToken22PDA(TEST_MINTS.validToken22Mint1.address, TEST_CP_AMMS.cpAmm1[0]), getTokenPDA(TEST_MINTS.validTokenMint3.address, TEST_CP_AMMS.cpAmm2[0]), getToken22PDA(TEST_MINTS.transferFeeToken2022Mint.address, TEST_CP_AMMS.cpAmm3[0]),
+                getTokenPDA(TEST_CP_AMMS.lpMint1.address, TEST_CP_AMMS.cpAmm1[0]), getTokenPDA(TEST_CP_AMMS.lpMint2.address, TEST_CP_AMMS.cpAmm2[0]), getTokenPDA(TEST_CP_AMMS.lpMint3.address, TEST_CP_AMMS.cpAmm3[0]),
+                getTokenPDA(TEST_CP_AMMS.lpMint1.address, user.address), getTokenPDA(TEST_CP_AMMS.lpMint2.address, user.address), getTokenPDA(TEST_CP_AMMS.lpMint3.address, user.address),
+                getTokenPDA(TEST_CP_AMMS.lpMint1.address, generalUser.address), getTokenPDA(TEST_CP_AMMS.lpMint2.address, generalUser.address), getTokenPDA(TEST_CP_AMMS.lpMint3.address,generalUser.address)
+            ]);
 
-            USER_TOKEN_ACCOUNTS.validToken221 = await createAtaWithTokens22(rpcClient, TEST_MINTS.validToken22Mint1.address, user, user, BigInt(1_000_000_000));
-            USER_TOKEN_ACCOUNTS.validToken222 = await createAtaWithTokens22(rpcClient, TEST_MINTS.validToken22Mint2.address, user, user, BigInt(1_000_000_000));
-            USER_TOKEN_ACCOUNTS.transferFeeToken22 = await createAtaWithTokens22(rpcClient, TEST_MINTS.transferFeeToken2022Mint.address, user, user, BigInt(1_000_000_000));
+            USER_TOKEN_ACCOUNTS.validToken1 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint1.address, user, user, BigInt(1_000_000_000_000_000));
+            USER_TOKEN_ACCOUNTS.validToken2 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint2.address, user, user, BigInt(1_000_000_000_000_000));
+            USER_TOKEN_ACCOUNTS.validToken3 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint3.address, user, user, BigInt(1_000_000_000_000_000));
 
-            GENERAL_USER_TOKEN_ACCOUNTS.validToken1 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint1.address, user, generalUser, BigInt(1_000_000_000));
-            GENERAL_USER_TOKEN_ACCOUNTS.validToken2 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint2.address, user, generalUser, BigInt(1_000_000_000));
-            GENERAL_USER_TOKEN_ACCOUNTS.validToken3 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint3.address, user, generalUser, BigInt(1_000_000_000));
+            USER_TOKEN_ACCOUNTS.validToken221 = await createAtaWithTokens22(rpcClient, TEST_MINTS.validToken22Mint1.address, user, user, BigInt(1_000_000_000_000_000));
+            USER_TOKEN_ACCOUNTS.validToken222 = await createAtaWithTokens22(rpcClient, TEST_MINTS.validToken22Mint2.address, user, user, BigInt(1_000_000_000_000_000));
+            USER_TOKEN_ACCOUNTS.transferFeeToken22 = await createAtaWithTokens22(rpcClient, TEST_MINTS.transferFeeToken2022Mint.address, user, user, BigInt(1_000_000_000_000_000));
 
-            GENERAL_USER_TOKEN_ACCOUNTS.validToken221 = await createAtaWithTokens22(rpcClient, TEST_MINTS.validToken22Mint1.address, user, generalUser, BigInt(1_000_000_000));
-            GENERAL_USER_TOKEN_ACCOUNTS.validToken222 = await createAtaWithTokens22(rpcClient, TEST_MINTS.validToken22Mint2.address, user, generalUser, BigInt(1_000_000_000));
-            GENERAL_USER_TOKEN_ACCOUNTS.transferFeeToken22 = await createAtaWithTokens22(rpcClient, TEST_MINTS.transferFeeToken2022Mint.address, user, generalUser, BigInt(1_000_000_000));
+            GENERAL_USER_TOKEN_ACCOUNTS.validToken1 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint1.address, user, generalUser, BigInt(1_000_000_000_000_000));
+            GENERAL_USER_TOKEN_ACCOUNTS.validToken2 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint2.address, user, generalUser, BigInt(1_000_000_000_000_000));
+            GENERAL_USER_TOKEN_ACCOUNTS.validToken3 = await createAtaWithTokens(rpcClient, TEST_MINTS.validTokenMint3.address, user, generalUser, BigInt(1_000_000_000_000_000));
+
+            GENERAL_USER_TOKEN_ACCOUNTS.validToken221 = await createAtaWithTokens22(rpcClient, TEST_MINTS.validToken22Mint1.address, user, generalUser, BigInt(1_000_000_000_000_000));
+            GENERAL_USER_TOKEN_ACCOUNTS.validToken222 = await createAtaWithTokens22(rpcClient, TEST_MINTS.validToken22Mint2.address, user, generalUser, BigInt(1_000_000_000_000_000));
+            GENERAL_USER_TOKEN_ACCOUNTS.transferFeeToken22 = await createAtaWithTokens22(rpcClient, TEST_MINTS.transferFeeToken2022Mint.address, user, generalUser, BigInt(1_000_000_000_000_000));
         })
 
-        // Initialize CpAmm (Error)
+        // Initialize CpAmm
 
         it("Unfunded with 0.1 SOL CpAmm initialization attempt should fail", async () => {
-            let unfundedUser = await createTestUser(rpcClient, 0.1);
-            const [ata] = await findAssociatedTokenPda({
-                mint: lpMint.address,
-                owner: unfundedUser.address,
-                tokenProgram: TOKEN_PROGRAM_ADDRESS,
-            });
+            const unfundedUser = await createTestUser(rpcClient, 0.1);
 
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: ammsConfigAddress[0],
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.validTokenMint1.address,
-                cpAmm: cpAmm[0],
+                cpAmm: TEST_CP_AMMS.cpAmm1[0],
                 feeAuthority: headAuthority.address,
-                lpMint,
+                lpMint: TEST_CP_AMMS.lpMint1,
                 quoteMint: TEST_MINTS.validTokenMint2.address,
                 rent,
                 signer: unfundedUser,
-                signerLpTokenAccount: ata,
+                signerLpTokenAccount: USER_TOKEN_ACCOUNTS.lpToken1[0],
                 systemProgram: SYSTEM_PROGRAM_ADDRESS,
                 tokenProgram: TOKEN_PROGRAM_ADDRESS
             }
@@ -155,17 +225,17 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
         it("Initialization CpAmm with equal mints should fail", async () => {
 
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: ammsConfigAddress[0],
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.validTokenMint1.address,
-                cpAmm: cpAmm[0],
+                cpAmm: TEST_CP_AMMS.cpAmm1[0],
                 feeAuthority: headAuthority.address,
-                lpMint,
+                lpMint: TEST_CP_AMMS.lpMint1,
                 quoteMint: TEST_MINTS.validTokenMint1.address,
                 rent,
                 signer: user,
-                signerLpTokenAccount: userLpAta[0],
+                signerLpTokenAccount: USER_TOKEN_ACCOUNTS.lpToken1[0],
                 systemProgram: SYSTEM_PROGRAM_ADDRESS,
                 tokenProgram: TOKEN_PROGRAM_ADDRESS
             }
@@ -180,17 +250,17 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
         it("Initialization CpAmm with invalid fee authority should fail", async () => {
 
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: ammsConfigAddress[0],
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.validTokenMint1.address,
-                cpAmm: cpAmm[0],
+                cpAmm: TEST_CP_AMMS.cpAmm1[0],
                 feeAuthority: user.address,
-                lpMint,
+                lpMint: TEST_CP_AMMS.lpMint1,
                 quoteMint: TEST_MINTS.validTokenMint2.address,
                 rent,
                 signer: user,
-                signerLpTokenAccount: userLpAta[0],
+                signerLpTokenAccount: USER_TOKEN_ACCOUNTS.lpToken1[0],
                 systemProgram: SYSTEM_PROGRAM_ADDRESS,
                 tokenProgram: TOKEN_PROGRAM_ADDRESS
             }
@@ -205,17 +275,17 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
         it("Initialization CpAmm with malware AmmsConfig should fail", async () => {
             const malwareAmmsConfigAddress = TEST_MINTS.validTokenMint2.address;
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: malwareAmmsConfigAddress,
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.validTokenMint1.address,
-                cpAmm: cpAmm[0],
+                cpAmm: TEST_CP_AMMS.cpAmm1[0],
                 feeAuthority: headAuthority.address,
-                lpMint,
+                lpMint: TEST_CP_AMMS.lpMint1,
                 quoteMint: TEST_MINTS.validTokenMint2.address,
                 rent,
                 signer: user,
-                signerLpTokenAccount: userLpAta[0],
+                signerLpTokenAccount: USER_TOKEN_ACCOUNTS.lpToken1[0],
                 systemProgram: SYSTEM_PROGRAM_ADDRESS,
                 tokenProgram: TOKEN_PROGRAM_ADDRESS
             }
@@ -236,11 +306,11 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
                 tokenProgram: TOKEN_PROGRAM_ADDRESS,
             });
 
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: ammsConfigAddress[0],
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.validTokenMint1.address,
-                cpAmm: cpAmm[0],
+                cpAmm: TEST_CP_AMMS.cpAmm1[0],
                 feeAuthority: headAuthority.address,
                 lpMint: invalidLpMint,
                 quoteMint: TEST_MINTS.validTokenMint2.address,
@@ -261,17 +331,17 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
         it("Initialization CpAmm with mint with freeze authority should fail", async () => {
 
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: ammsConfigAddress[0],
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.freezeAuthorityTokenMint.address,
-                cpAmm: cpAmm[0],
+                cpAmm: TEST_CP_AMMS.cpAmm1[0],
                 feeAuthority: headAuthority.address,
-                lpMint,
+                lpMint: TEST_CP_AMMS.lpMint1,
                 quoteMint: TEST_MINTS.validTokenMint2.address,
                 rent,
                 signer: user,
-                signerLpTokenAccount: userLpAta[0],
+                signerLpTokenAccount: USER_TOKEN_ACCOUNTS.lpToken1[0],
                 systemProgram: SYSTEM_PROGRAM_ADDRESS,
                 tokenProgram: TOKEN_PROGRAM_ADDRESS
             }
@@ -285,17 +355,17 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
         })
 
         it("Initialization CpAmm with mint with one of forbidden token extensions (Permanent Delegate) should fail", async () => {
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: ammsConfigAddress[0],
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.permanentDelegateToken2022Mint.address,
-                cpAmm: cpAmm[0],
+                cpAmm: TEST_CP_AMMS.cpAmm1[0],
                 feeAuthority: headAuthority.address,
-                lpMint,
+                lpMint: TEST_CP_AMMS.lpMint1,
                 quoteMint: TEST_MINTS.validTokenMint2.address,
                 rent,
                 signer: user,
-                signerLpTokenAccount: userLpAta[0],
+                signerLpTokenAccount: USER_TOKEN_ACCOUNTS.lpToken1[0],
                 systemProgram: SYSTEM_PROGRAM_ADDRESS,
                 tokenProgram: TOKEN_PROGRAM_ADDRESS
             }
@@ -308,22 +378,20 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             ).then(() => assert.fail("Expected failure of CpAmm initialization with mint with one of forbidden token extensions (Permanent Delegate)")).catch();
         })
 
-        // Initialize CpAmm
-
         it("Initialization CpAmm with token mint and token 2022", async () => {
             const feeAuthorityBalanceBefore = await rpcClient.rpc.getBalance(headAuthority.address).send();
 
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: ammsConfigAddress[0],
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.validTokenMint1.address,
-                cpAmm: cpAmm[0],
+                cpAmm: TEST_CP_AMMS.cpAmm1[0],
                 feeAuthority: headAuthority.address,
-                lpMint,
+                lpMint: TEST_CP_AMMS.lpMint1,
                 quoteMint: TEST_MINTS.validToken22Mint1.address,
                 rent,
                 signer: user,
-                signerLpTokenAccount: userLpAta[0],
+                signerLpTokenAccount: USER_TOKEN_ACCOUNTS.lpToken1[0],
                 systemProgram: SYSTEM_PROGRAM_ADDRESS,
                 tokenProgram: TOKEN_PROGRAM_ADDRESS
             }
@@ -337,8 +405,8 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
             const [feeAuthorityBalanceAfter, lpMintAccount, cpAmmAccount] = await Promise.all([
                 rpcClient.rpc.getBalance(headAuthority.address).send(),
-                fetchMint(rpcClient.rpc, lpMint.address),
-                fetchCpAmm(rpcClient.rpc, cpAmm[0])
+                fetchMint(rpcClient.rpc, TEST_CP_AMMS.lpMint1.address),
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm1[0])
             ]);
 
             assert.ok(lpMintAccount, "LP mint account was not created");
@@ -358,8 +426,8 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.strictEqual(cpAmmAccount.data.quoteVault.toString(), "11111111111111111111111111111111", "Quote vault address mismatch");
             assert.strictEqual(cpAmmAccount.data.lockedLpVault.toString(), "11111111111111111111111111111111", "LP vault address mismatch");
 
-            assert.strictEqual(cpAmmAccount.data.isInitialized, true,  "Fee authority does not match expected value");
-            assert.strictEqual(cpAmmAccount.data.isLaunched, false,  "Fee authority does not match expected value");
+            assert.strictEqual(cpAmmAccount.data.isInitialized, true,  "CpAmm should be initialized");
+            assert.strictEqual(cpAmmAccount.data.isLaunched, false,  "CpAmm shouldn't be launched");
 
             assert.strictEqual(cpAmmAccount.data.initialLockedLiquidity, BigInt(0), "Initial locked liquidity should be 0");
             assert.strictEqual(cpAmmAccount.data.lpTokensSupply, BigInt(0), "LP token supply should be 0");
@@ -371,21 +439,21 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.deepStrictEqual(cpAmmAccount.data.baseQuoteRatioSqrt, {value: [[BigInt(0), BigInt(0), BigInt(0)]]}, "Base quote ratio sqrt should be initialized to 0");
             assert.deepStrictEqual(cpAmmAccount.data.constantProductSqrt, {value: [[BigInt(0), BigInt(0), BigInt(0)]]}, "Constant product sqrt should be initialized to 0");
 
-            assert.strictEqual(cpAmmAccount.data.bump[0], cpAmm[1].valueOf(), "Bump value is incorrect");
+            assert.strictEqual(cpAmmAccount.data.bump[0], TEST_CP_AMMS.cpAmm1[1].valueOf(), "Bump value is incorrect");
         })
 
         it("Reinitialization of CpAmm should fail", async () => {
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: ammsConfigAddress[0],
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.validTokenMint1.address,
-                cpAmm: cpAmm[0],
+                cpAmm: TEST_CP_AMMS.cpAmm1[0],
                 feeAuthority: headAuthority.address,
-                lpMint,
+                lpMint: TEST_CP_AMMS.lpMint1,
                 quoteMint: TEST_MINTS.validToken22Mint1.address,
                 rent,
                 signer: user,
-                signerLpTokenAccount: userLpAta[0],
+                signerLpTokenAccount: USER_TOKEN_ACCOUNTS.lpToken1[0],
                 systemProgram: SYSTEM_PROGRAM_ADDRESS,
                 tokenProgram: TOKEN_PROGRAM_ADDRESS
             }
@@ -399,27 +467,19 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
         })
 
         it("Initialization CpAmm with two token mints", async () => {
-            const lpMint2 = await generateKeyPairSigner();
-            const cpAmm2 = await getProgramDerivedAddress({programAddress: program.CPMM_PROGRAM_ADDRESS, seeds: ["cp_amm", getAddressEncoder().encode(lpMint2.address)]});
-            const userLpAta2 = await findAssociatedTokenPda({
-                mint: lpMint2.address,
-                owner: user.address,
-                tokenProgram: TOKEN_PROGRAM_ADDRESS,
-            });
-
             const feeAuthorityBalanceBefore = await rpcClient.rpc.getBalance(headAuthority.address).send();
 
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: ammsConfigAddress[0],
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.validTokenMint2.address,
-                cpAmm: cpAmm2[0],
+                cpAmm: TEST_CP_AMMS.cpAmm2[0],
                 feeAuthority: headAuthority.address,
-                lpMint: lpMint2,
+                lpMint: TEST_CP_AMMS.lpMint2,
                 quoteMint: TEST_MINTS.validTokenMint3.address,
                 rent,
                 signer: user,
-                signerLpTokenAccount: userLpAta2[0],
+                signerLpTokenAccount: USER_TOKEN_ACCOUNTS.lpToken2[0],
                 systemProgram: SYSTEM_PROGRAM_ADDRESS,
                 tokenProgram: TOKEN_PROGRAM_ADDRESS
             }
@@ -433,8 +493,8 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
             const [feeAuthorityBalanceAfter, lpMintAccount, cpAmmAccount] = await Promise.all([
                 rpcClient.rpc.getBalance(headAuthority.address).send(),
-                fetchMint(rpcClient.rpc, lpMint2.address),
-                fetchCpAmm(rpcClient.rpc, cpAmm2[0])
+                fetchMint(rpcClient.rpc, TEST_CP_AMMS.lpMint2.address),
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm2[0])
             ]);
 
             assert.ok(lpMintAccount, "LP mint account was not created");
@@ -454,8 +514,8 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.strictEqual(cpAmmAccount.data.quoteVault.toString(), "11111111111111111111111111111111", "Quote vault address mismatch");
             assert.strictEqual(cpAmmAccount.data.lockedLpVault.toString(), "11111111111111111111111111111111", "LP vault address mismatch");
 
-            assert.strictEqual(cpAmmAccount.data.isInitialized, true,  "Fee authority does not match expected value");
-            assert.strictEqual(cpAmmAccount.data.isLaunched, false,  "Fee authority does not match expected value");
+            assert.strictEqual(cpAmmAccount.data.isInitialized, true,  "CpAmm should be initialized");
+            assert.strictEqual(cpAmmAccount.data.isLaunched, false,  "CpAmm shouldn't be launched");
 
             assert.strictEqual(cpAmmAccount.data.initialLockedLiquidity, BigInt(0), "Initial locked liquidity should be 0");
             assert.strictEqual(cpAmmAccount.data.lpTokensSupply, BigInt(0), "LP token supply should be 0");
@@ -467,31 +527,23 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.deepStrictEqual(cpAmmAccount.data.baseQuoteRatioSqrt, {value: [[BigInt(0), BigInt(0), BigInt(0)]]}, "Base quote ratio sqrt should be initialized to 0");
             assert.deepStrictEqual(cpAmmAccount.data.constantProductSqrt, {value: [[BigInt(0), BigInt(0), BigInt(0)]]}, "Constant product sqrt should be initialized to 0");
 
-            assert.strictEqual(cpAmmAccount.data.bump[0], cpAmm2[1].valueOf(), "Bump value is incorrect");
+            assert.strictEqual(cpAmmAccount.data.bump[0], TEST_CP_AMMS.cpAmm2[1].valueOf(), "Bump value is incorrect");
         })
 
-        it("Initialization CpAmm with token mint and token 2022 with one allowed extension (Transfer Fee Config)", async () => {
-            const lpMint3 = await generateKeyPairSigner();
-            const cpAmm3 = await getProgramDerivedAddress({programAddress: program.CPMM_PROGRAM_ADDRESS, seeds: ["cp_amm", getAddressEncoder().encode(lpMint3.address)]});
-            const userLpAta3 = await findAssociatedTokenPda({
-                mint: lpMint3.address,
-                owner: user.address,
-                tokenProgram: TOKEN_PROGRAM_ADDRESS,
-            });
-
+        it("Initialization CpAmm with token mint and token 2022 with one of allowed extensions (Transfer Fee Config)", async () => {
             const feeAuthorityBalanceBefore = await rpcClient.rpc.getBalance(headAuthority.address).send();
 
-            let input: InitializeCpAmmInput = {
+            const input: InitializeCpAmmInput = {
                 ammsConfig: ammsConfigAddress[0],
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
                 baseMint: TEST_MINTS.validTokenMint2.address,
-                cpAmm: cpAmm3[0],
+                cpAmm: TEST_CP_AMMS.cpAmm3[0],
                 feeAuthority: headAuthority.address,
-                lpMint: lpMint3,
+                lpMint: TEST_CP_AMMS.lpMint3,
                 quoteMint: TEST_MINTS.transferFeeToken2022Mint.address,
                 rent,
                 signer: user,
-                signerLpTokenAccount: userLpAta3[0],
+                signerLpTokenAccount: USER_TOKEN_ACCOUNTS.lpToken3[0],
                 systemProgram: SYSTEM_PROGRAM_ADDRESS,
                 tokenProgram: TOKEN_PROGRAM_ADDRESS
             }
@@ -505,8 +557,8 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
             const [feeAuthorityBalanceAfter, lpMintAccount, cpAmmAccount] = await Promise.all([
                 rpcClient.rpc.getBalance(headAuthority.address).send(),
-                fetchMint(rpcClient.rpc, lpMint3.address),
-                fetchCpAmm(rpcClient.rpc, cpAmm3[0])
+                fetchMint(rpcClient.rpc, TEST_CP_AMMS.lpMint3.address),
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm3[0])
             ]);
 
             assert.ok(lpMintAccount, "LP mint account was not created");
@@ -526,8 +578,8 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.strictEqual(cpAmmAccount.data.quoteVault.toString(), "11111111111111111111111111111111", "Quote vault address mismatch");
             assert.strictEqual(cpAmmAccount.data.lockedLpVault.toString(), "11111111111111111111111111111111", "LP vault address mismatch");
 
-            assert.strictEqual(cpAmmAccount.data.isInitialized, true,  "Fee authority does not match expected value");
-            assert.strictEqual(cpAmmAccount.data.isLaunched, false,  "Fee authority does not match expected value");
+            assert.strictEqual(cpAmmAccount.data.isInitialized, true,  "CpAmm should be initialized");
+            assert.strictEqual(cpAmmAccount.data.isLaunched, false,  "CpAmm shouldn't be launched");
 
             assert.strictEqual(cpAmmAccount.data.initialLockedLiquidity, BigInt(0), "Initial locked liquidity should be 0");
             assert.strictEqual(cpAmmAccount.data.lpTokensSupply, BigInt(0), "LP token supply should be 0");
@@ -539,7 +591,118 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.deepStrictEqual(cpAmmAccount.data.baseQuoteRatioSqrt, {value: [[BigInt(0), BigInt(0), BigInt(0)]]}, "Base quote ratio sqrt should be initialized to 0");
             assert.deepStrictEqual(cpAmmAccount.data.constantProductSqrt, {value: [[BigInt(0), BigInt(0), BigInt(0)]]}, "Constant product sqrt should be initialized to 0");
 
-            assert.strictEqual(cpAmmAccount.data.bump[0], cpAmm3[1].valueOf(), "Bump value is incorrect");
+            assert.strictEqual(cpAmmAccount.data.bump[0], TEST_CP_AMMS.cpAmm3[1].valueOf(), "Bump value is incorrect");
         })
+
+        // Launch CpAmm
+
+        it("Launch CpAmm with token mint and token 2022", async () => {
+            const [cpAmmAccountBefore, signerBaseBalanceBefore, signerQuoteBalanceBefore] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm1[0]),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken1.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken221.address).send()
+            ]);
+            const [baseMint, quoteMint] = await Promise.all([
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.baseMint),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint)
+            ]);
+
+            const baseLiquidity = BigInt(212342403);
+            const quoteLiquidity = BigInt(453247832);
+            const totalLiquidity = BigInt(Math.floor(Math.sqrt(Number(baseLiquidity * quoteLiquidity))));
+
+            const lpMintAccountBefore = await fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.lpMint);
+
+            const initialLockedLiquidity = BigInt(Math.pow(10, lpMintAccountBefore.data.decimals));
+            const signersLiquidity = totalLiquidity - initialLockedLiquidity;
+
+            const input: LaunchCpAmmInput = {
+                ammsConfig: ammsConfigAddress[0],
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                baseLiquidity,
+                baseMint: cpAmmAccountBefore.data.baseMint,
+                cpAmm: cpAmmAccountBefore.address,
+                cpAmmBaseVault: TEST_CP_AMMS.baseVault1[0],
+                cpAmmLockedLpVault: TEST_CP_AMMS.lpVault1[0],
+                cpAmmQuoteVault: TEST_CP_AMMS.quoteVault1[0],
+                lpMint: cpAmmAccountBefore.data.lpMint,
+                quoteLiquidity,
+                quoteMint: cpAmmAccountBefore.data.quoteMint,
+                signer: user,
+                signerBaseAccount: USER_TOKEN_ACCOUNTS.validToken1.address,
+                signerLpAccount:  USER_TOKEN_ACCOUNTS.lpToken1[0],
+                signerQuoteAccount:  USER_TOKEN_ACCOUNTS.validToken221.address,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                baseTokenProgram: baseMint.programAddress,
+                lpTokenProgram: TOKEN_PROGRAM_ADDRESS,
+                quoteTokenProgram: quoteMint.programAddress,
+            }
+
+            const ix = getLaunchCpAmmInstruction(input);
+
+            await pipe(
+                await createTransactionWithComputeUnits(rpcClient, owner, [ix], 350_000),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            );
+
+            const cpAmmAccountAfter = await fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm1[0]);
+
+            const [lpMintAccountAfter, signerBaseBalanceAfter, signerQuoteBalanceAfter, signerLpBalanceAfter, cpAmmBaseBalance, cpAmmQuoteBalance, cpAmmLpBalance] = await Promise.all([
+                fetchMint(rpcClient.rpc, cpAmmAccountAfter.data.lpMint),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken1.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken221.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.lpToken1[0]).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountAfter.data.baseVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountAfter.data.quoteVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountAfter.data.lockedLpVault).send()
+            ]);
+
+            assert.strictEqual(BigInt(signerBaseBalanceBefore.value.amount) - BigInt(signerBaseBalanceAfter.value.amount), baseLiquidity, "Signer base balance does not match expected value");
+            assert.strictEqual(BigInt(signerQuoteBalanceBefore.value.amount) - BigInt(signerQuoteBalanceAfter.value.amount), quoteLiquidity, "Signer quote balance does not match expected value");
+            assert.strictEqual(BigInt(signerLpBalanceAfter.value.amount), signersLiquidity, "Signer lp balance does not match expected value");
+
+            assert.strictEqual(BigInt(cpAmmBaseBalance.value.amount), baseLiquidity, "CpAmm base balance does not match expected value");
+            assert.strictEqual(BigInt(cpAmmQuoteBalance.value.amount), quoteLiquidity, "CpAmm quote balance does not match expected value");
+            assert.strictEqual(BigInt(cpAmmLpBalance.value.amount), initialLockedLiquidity, "CpAmm locked lp balance does not match expected value");
+
+            assert.strictEqual(lpMintAccountAfter.data.supply, totalLiquidity, "LP mint supply is incorrect");
+
+            assert.strictEqual(cpAmmAccountBefore.data.ammsConfig, cpAmmAccountAfter.data.ammsConfig,  "AMMs config address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseMint, cpAmmAccountAfter.data.baseMint, "Base mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lpMint, cpAmmAccountAfter.data.lpMint, "LP mint address should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountAfter.data.baseVault, TEST_CP_AMMS.baseVault1[0], "Base vault address mismatch");
+            assert.strictEqual(cpAmmAccountAfter.data.quoteVault, TEST_CP_AMMS.quoteVault1[0], "Quote vault address mismatch");
+            assert.strictEqual(cpAmmAccountAfter.data.lockedLpVault, TEST_CP_AMMS.lpVault1[0], "LP vault address mismatch");
+
+            assert.strictEqual(cpAmmAccountBefore.data.protocolBaseFeesToRedeem, cpAmmAccountAfter.data.protocolBaseFeesToRedeem, "Protocol base fees should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.protocolQuoteFeesToRedeem, cpAmmAccountAfter.data.protocolQuoteFeesToRedeem, "Protocol quote fees should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.bump[0], TEST_CP_AMMS.cpAmm1[1].valueOf(), "Bump value should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
+            assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
+
+            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, initialLockedLiquidity, `Initial locked liquidity should be ${initialLockedLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, totalLiquidity, `LP token supply should be ${totalLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity, baseLiquidity, `Base liquidity should be ${baseLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity, quoteLiquidity, `Quote liquidity should be ${quoteLiquidity}`);
+
+            assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, {value: [[ 11569318178613274784n, 12626128898751551786n, 0n ]]}, "Base quote ratio sqrt mismatch");
+            assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, {value: [[ 11035359224094822028n, 1696597754053898133n, 310231742n ]]}, "Constant product sqrt mismatch");
+
+        })
+
+        // Provide CpAmm
+
+
+
+        // Swap CpAmm
+
+
+
+        // Withdraw CpAmm
+
+
     })
 }

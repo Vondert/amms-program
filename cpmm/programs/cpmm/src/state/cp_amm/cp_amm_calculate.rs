@@ -36,6 +36,25 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     ///   when recalculating the liquidity ratio of the pool.
     /// - Defined as a `Q64_128` value representing a tolerance of `0.00001%`.
     const ADJUST_LIQUIDITY_RATIO_TOLERANCE: Q64_128 = Q64_128::from_bits(0, 3402823669209384634633746074317);
+
+    /// Calculates the initial LP token supply and locked liquidity during pool launch.
+    ///
+    /// # Parameters
+    /// - `constant_product_sqrt`: The square root of the constant product for the pool.
+    ///
+    /// # Returns
+    /// - `Ok((u64, u64))` with the initial LP token supply and locked liquidity.
+    /// - `Err(ErrorCode)` if the supply is too small.
+    fn calculate_launch_lp_tokens(constant_product_sqrt: Q64_128) -> Result<(u64, u64)> {
+        let lp_tokens_supply = constant_product_sqrt.as_u64_round();
+        require!(lp_tokens_supply > 0, ErrorCode::LpTokensCalculationFailed);
+        let initial_locked_liquidity = Self::INITIAL_LOCKED_LP_TOKENS;
+        let difference = lp_tokens_supply
+            .checked_sub(initial_locked_liquidity)
+            .ok_or(ErrorCode::LaunchLiquidityTooSmall)?;
+        require!(difference >= initial_locked_liquidity * 3, ErrorCode::LaunchLiquidityTooSmall);
+        Ok((lp_tokens_supply, initial_locked_liquidity))
+    }
     
     /// Calculates the amount of LP tokens to mint based on the provided liquidity.
     ///
@@ -55,6 +74,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
         }
         Some(tokens_to_mint)
     }
+    
     /// Calculates the amount of base and quote liquidity to withdraw for a given share of LP tokens.
     ///
     /// # Parameters
@@ -132,6 +152,23 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
         Ok(())
     }
 
+    /// Validates the result of a swap against the estimated result and allowed slippage.
+    ///
+    /// # Parameters
+    /// - `swap_result`: The actual result of the swap.
+    /// - `estimated_swap_result`: The estimated result of the swap.
+    /// - `allowed_slippage`: The allowed slippage tolerance.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the swap result is within the allowed slippage.
+    /// - `Err(ErrorCode)` if the result exceeds the slippage tolerance.
+    #[inline]
+    fn check_swap_result(swap_result: u64, estimated_swap_result: u64, allowed_slippage: u64) -> Result<()> {
+        require!(swap_result > 0, ErrorCode::SwapResultIsZero);
+        require!(swap_result.abs_diff(estimated_swap_result) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
+        Ok(())
+    }
+    
     /// Calculates the opposite liquidity value based on the constant product formula.
     ///
     /// # Parameters
@@ -161,23 +198,6 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     #[inline]
     fn calculate_fee_amount(swap_amount: u64, fee_basis_points: u16) -> u64 {
         ((swap_amount as u128) * (fee_basis_points as u128) / Self::FEE_MAX_BASIS_POINTS) as u64
-    }
-    
-    /// Validates the result of a swap against the estimated result and allowed slippage.
-    ///
-    /// # Parameters
-    /// - `swap_result`: The actual result of the swap.
-    /// - `estimated_swap_result`: The estimated result of the swap.
-    /// - `allowed_slippage`: The allowed slippage tolerance.
-    ///
-    /// # Returns
-    /// - `Ok(())` if the swap result is within the allowed slippage.
-    /// - `Err(ErrorCode)` if the result exceeds the slippage tolerance.
-    #[inline]
-    fn check_swap_result(swap_result: u64, estimated_swap_result: u64, allowed_slippage: u64) -> Result<()> {
-        require!(swap_result > 0, ErrorCode::SwapResultIsZero);
-        require!(swap_result.abs_diff(estimated_swap_result) <= allowed_slippage, ErrorCode::SwapSlippageExceeded);
-        Ok(())
     }
     
     /// Calculates the base-to-quote liquidity ratio square root.
@@ -214,25 +234,6 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
             return None;
         }
         Some(constant_product_sqrt)
-    }
-
-    /// Calculates the initial LP token supply and locked liquidity during pool launch.
-    ///
-    /// # Parameters
-    /// - `constant_product_sqrt`: The square root of the constant product for the pool.
-    ///
-    /// # Returns
-    /// - `Ok((u64, u64))` with the initial LP token supply and locked liquidity.
-    /// - `Err(ErrorCode)` if the supply is too small.
-    fn calculate_launch_lp_tokens(constant_product_sqrt: Q64_128) -> Result<(u64, u64)> {
-        let lp_tokens_supply = constant_product_sqrt.as_u64_round();
-        require!(lp_tokens_supply > 0, ErrorCode::LpTokensCalculationFailed);
-        let initial_locked_liquidity = Self::INITIAL_LOCKED_LP_TOKENS;
-        let difference = lp_tokens_supply
-            .checked_sub(initial_locked_liquidity)
-            .ok_or(ErrorCode::LaunchLiquidityTooSmall)?;
-        require!(difference >= initial_locked_liquidity * 3, ErrorCode::LaunchLiquidityTooSmall);
-        Ok((lp_tokens_supply, initial_locked_liquidity))
     }
 }
 

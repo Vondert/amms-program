@@ -4,7 +4,7 @@ import {
     fetchToken as fetchTokenAccount,
     getInitializeMint2Instruction as getInitializeTokenMint2Instruction,
     getMintSize as getTokenMintSize, Mint as TokenMint, Token as TokenAccount,
-    TOKEN_PROGRAM_ADDRESS, getCreateAssociatedTokenIdempotentInstruction, findAssociatedTokenPda, getMintToInstruction
+    TOKEN_PROGRAM_ADDRESS, getCreateAssociatedTokenIdempotentInstruction, getMintToInstruction
 } from "@solana-program/token";
 import {
     fetchMint as fetchToken22Mint,
@@ -17,11 +17,10 @@ import {
     Mint as Token22Mint,
     Token as Token22Account,
     getCreateAssociatedTokenIdempotentInstruction as getCreateAssociatedToken22IdempotentInstruction,
-    findAssociatedTokenPda as findAssociatedToken22Pda,
     getMintToInstruction as getMint22ToInstruction
 } from "@solana-program/token-2022";
 import {getCreateAccountInstruction} from "@solana-program/system";
-import {createTransaction, RpcClient, signAndSendTransaction} from "./helpers";
+import {createTransaction, getToken22PDA, getTokenPDA, RpcClient, signAndSendTransaction} from "./helpers";
 
 export const createTokenMint = async (rpcClient: RpcClient, authority: KeyPairSigner, decimals: number, freezeAuthority?: Address): Promise<Account<TokenMint>> => {
     const mint = await generateKeyPairSigner();
@@ -131,13 +130,12 @@ export const createToken22MintWithTransferFee = async (rpcClient: RpcClient, aut
 
 export const createToken22MintWithPermanentDelegate = async (rpcClient: RpcClient, authority: KeyPairSigner, decimals: number, freezeAuthority?: Address): Promise<Account<Token22Mint>> => {
     const mint = await generateKeyPairSigner();
-    const mintSpace = BigInt(getToken22MintSize([
-        {
-            __kind: "PermanentDelegate",
-            delegate: authority.address
-        }
-    ]));
+    const mintSpace = BigInt(getToken22MintSize([{
+        __kind: "PermanentDelegate",
+        delegate: authority.address
+    }]));
     const mintRent = await rpcClient.rpc.getMinimumBalanceForRentExemption(mintSpace).send();
+
     const instructions = [
         getCreateAccountInstruction({
             payer: authority,
@@ -166,11 +164,7 @@ export const createToken22MintWithPermanentDelegate = async (rpcClient: RpcClien
 }
 
 export const createAtaWithTokens = async (rpcClient: RpcClient, mint: Address, mintAuthority: KeyPairSigner, recipient: KeyPairSigner, mintAmount: bigint): Promise<Account<TokenAccount>> =>{
-    const [ata] = await findAssociatedTokenPda({
-        mint: mint,
-        owner: recipient.address,
-        tokenProgram: TOKEN_PROGRAM_ADDRESS,
-    });
+    const [ata] = await getTokenPDA(mint, recipient.address);
 
     const instructions = [
         getCreateAssociatedTokenIdempotentInstruction({
@@ -196,11 +190,7 @@ export const createAtaWithTokens = async (rpcClient: RpcClient, mint: Address, m
 }
 
 export const createAtaWithTokens22 = async (rpcClient: RpcClient, mint: Address, mintAuthority: KeyPairSigner, recipient: KeyPairSigner, mintAmount: bigint): Promise<Account<Token22Account>> =>{
-    const [ata] = await findAssociatedToken22Pda({
-        mint: mint,
-        owner: recipient.address,
-        tokenProgram: TOKEN_2022_PROGRAM_ADDRESS,
-    });
+    const [ata] = await getToken22PDA(mint, recipient.address);
 
     const instructions = [
         getCreateAssociatedToken22IdempotentInstruction({

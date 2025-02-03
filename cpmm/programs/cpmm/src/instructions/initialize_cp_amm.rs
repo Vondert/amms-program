@@ -1,9 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::{
-    token::{Mint, Token, TokenAccount},
-    token_interface
-};
+use anchor_spl::{token, token::{Mint, Token, TokenAccount}, token_interface};
 use crate::constants::CP_AMM_INITIALIZE_PRICE_IN_LAMPORTS;
 use crate::state::{AmmsConfig, cp_amm::{
     CpAmm, 
@@ -56,7 +53,8 @@ pub struct InitializeCpAmm<'info> {
         associated_token::mint = lp_mint,
         associated_token::authority = signer,
     )]
-    pub signer_lp_token_account: Account<'info, TokenAccount>,
+    pub signer_lp_token_account: Box<Account<'info, TokenAccount>>,
+    
     pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,

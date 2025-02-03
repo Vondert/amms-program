@@ -2,8 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token;
 use anchor_spl::token::Token;
-use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::{Mint, TokenAccount};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use crate::state::{AmmsConfig, cp_amm::CpAmm};
 use crate::utils::token_instructions::{BurnTokensInstructions, TransferTokensInstruction};
 
@@ -21,6 +20,7 @@ pub struct WithdrawFromCpAmm<'info>{
         payer = signer,
         associated_token::mint = base_mint,
         associated_token::authority = signer,
+        associated_token::token_program = base_token_program
     )]
     pub signer_base_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
@@ -29,6 +29,7 @@ pub struct WithdrawFromCpAmm<'info>{
         payer = signer,
         associated_token::mint = quote_mint,
         associated_token::authority = signer,
+        associated_token::token_program = quote_token_program
     )]
     pub signer_quote_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
@@ -63,8 +64,9 @@ pub struct WithdrawFromCpAmm<'info>{
     pub cp_amm_quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub associated_token_program: Program<'info, AssociatedToken>,
-    pub token_program: Program<'info, Token>,
-    pub token_2022_program: Program<'info, Token2022>,
+    pub lp_token_program: Program<'info, Token>,
+    pub base_token_program: Interface<'info, TokenInterface>,
+    pub quote_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
 
@@ -76,8 +78,7 @@ impl<'info> WithdrawFromCpAmm<'info>{
             &self.cp_amm_base_vault,
             self.cp_amm.to_account_info(),
             &self.signer_base_account,
-            &self.token_program,
-            &self.token_2022_program
+            &self.base_token_program
         )
     }
     fn get_withdraw_quote_liquidity_transfer_instruction(&self, quote_liquidity: u64) -> Result<TransferTokensInstruction<'_, '_, '_, 'info>>{
@@ -87,8 +88,7 @@ impl<'info> WithdrawFromCpAmm<'info>{
             &self.signer_quote_account,
             self.cp_amm.to_account_info(),
             &self.cp_amm_quote_vault,
-            &self.token_program,
-            &self.token_2022_program
+            &self.quote_token_program
         )
     }
     fn get_liquidity_burn_instruction(&self, liquidity: u64) -> Result<BurnTokensInstructions<'_, '_, '_, 'info>>{
@@ -97,7 +97,7 @@ impl<'info> WithdrawFromCpAmm<'info>{
             &self.lp_mint,
             &self.signer_lp_account,
             self.signer.to_account_info(),
-            &self.token_program
+            &self.lp_token_program
         )
     }
 }
