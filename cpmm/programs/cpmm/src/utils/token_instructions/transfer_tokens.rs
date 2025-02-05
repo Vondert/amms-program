@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::{
     token::{ID as TOKEN_PROGRAM_ID}
 };
-use anchor_spl::token_interface::{get_mint_extension_data, transfer_checked, transfer_checked_with_fee, Mint, TokenAccount, TokenInterface};
+use anchor_spl::token_interface::{get_mint_extension_data, transfer_checked, transfer_checked_with_fee, Mint, TokenInterface};
 use anchor_spl::token_interface::spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use crate::utils::token_instructions::{TransferContextRegular, TransferContextWithFee};
 use crate::error::ErrorCode;
@@ -33,20 +33,14 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
     /// - `to`: The destination token account.
     /// - `token_program`: Program for standard SPL tokens.
     /// - `token_2022_program`: Program for SPL Token 2022.
-    ///
-    /// Returns:
-    /// - `Ok(Self)` if the instruction is successfully created.
-    /// - `Err(ErrorCode)` if any validation fails.
-    pub fn new(
+    pub fn try_new(
         amount: u64, 
         mint: &'_ InterfaceAccount<'info, Mint>, 
-        from: &'_ InterfaceAccount<'info, TokenAccount>, 
-        from_authority: AccountInfo<'info>, 
-        to: &'_ InterfaceAccount<'info, TokenAccount>, 
+        from: AccountInfo<'info>, 
+        from_authority: AccountInfo<'info>,
+        to: AccountInfo<'info>, 
         token_program: &'_ Interface<'info, TokenInterface>
     ) -> Result<Self> {
-        require!(from.amount >= amount, ErrorCode::InsufficientBalanceForTransfer);
-        require!(mint.to_account_info().owner.key() == token_program.key(), ErrorCode::MintAndTokenProgramMismatch);
         
         let context = if mint.to_account_info().owner.key() == TOKEN_PROGRAM_ID {
             TransferContextType::Regular(
@@ -83,6 +77,7 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
     /// Returns:
     /// - `Ok(())` if the transfer is successful.
     /// - `Err(ErrorCode)` if the transfer fails.
+    #[inline(never)]
     pub fn execute(mut self, optional_signers_seeds: Option<&'at[&'bt[&'ct[u8]]]>) -> Result<()>{
         if let Some(signer_seeds) = optional_signers_seeds {
             self.context = self.context.add_signers_seeds(signer_seeds);
@@ -101,6 +96,7 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
     ///
     /// Returns:
     /// - The number of decimals.
+    #[inline]
     pub fn get_decimals(&self) -> u8{
         self.decimals
     }
@@ -109,6 +105,7 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
     ///
     /// Returns:
     /// - The net amount of tokens after fees.
+    #[inline]
     pub fn get_amount_after_fee(&self) -> u64{
         self.get_raw_amount().checked_sub(self.get_fee()).unwrap()
     }
@@ -117,6 +114,7 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
     ///
     /// Returns:
     /// - The fee amount for the transaction.
+    #[inline]
     pub fn get_fee(&self) -> u64{
         match &self.context{
             TransferContextType::Regular(_) => {
@@ -132,6 +130,7 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
     ///
     /// Returns:
     /// - The raw transfer amount.
+    #[inline]
     pub fn get_raw_amount(&self) -> u64{
         self.amount
     }
@@ -152,6 +151,7 @@ impl<'at, 'bt, 'ct> TransferContextType<'at, 'bt, 'ct, '_>{
     ///
     /// Returns:
     /// - A new context with the signer seeds added.
+    #[inline]
     fn add_signers_seeds(self, signers_seeds: &'at[&'bt[&'ct[u8]]]) -> Self {
         match self {
             TransferContextType::Regular(context) => {

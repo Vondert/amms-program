@@ -65,45 +65,44 @@ pub struct CollectFeesFromCpAmm<'info> {
     pub system_program: Program<'info, System>,
 }
 
+pub(crate) fn handler(ctx: Context<CollectFeesFromCpAmm>) -> Result<()> {
+    let collect_fees_payload = ctx.accounts.cp_amm.get_collect_fees_payload()?;
+    let (protocol_base_fees_to_redeem, protocol_quote_fees_to_redeem) = (collect_fees_payload.protocol_base_fees_to_redeem(), collect_fees_payload.protocol_quote_fees_to_redeem());
+
+    let cp_amm_seeds = ctx.accounts.cp_amm.seeds();
+    let collect_fees_instruction_seeds: &[&[&[u8]]] = &[&cp_amm_seeds];
+
+    if protocol_base_fees_to_redeem > 0{
+        ctx.accounts.get_collect_base_fees_transfer_instruction(protocol_base_fees_to_redeem)?.execute(Some(collect_fees_instruction_seeds))?;
+    }
+    if protocol_quote_fees_to_redeem > 0{
+        ctx.accounts.get_collect_quote_fees_transfer_instruction(protocol_quote_fees_to_redeem)?.execute(Some(collect_fees_instruction_seeds))?;
+    }
+
+    ctx.accounts.cp_amm.collect_fees(collect_fees_payload);
+    Ok(())
+}
+
 impl<'info> CollectFeesFromCpAmm<'info> {
     fn get_collect_base_fees_transfer_instruction(&self, base_fees: u64) -> Result<TransferTokensInstruction<'_, '_, '_, 'info>>{
-        TransferTokensInstruction::new(
+        TransferTokensInstruction::try_new(
             base_fees,
             &self.base_mint,
-            &self.cp_amm_base_vault,
+            self.cp_amm_base_vault.to_account_info(),
             self.cp_amm.to_account_info(),
-            &self.fee_authority_base_account,
+            self.fee_authority_base_account.to_account_info(),
             &self.base_token_program
         )
     }
     fn get_collect_quote_fees_transfer_instruction(&self, quote_fees: u64) -> Result<TransferTokensInstruction<'_, '_, '_, 'info>>{
-        TransferTokensInstruction::new(
+        TransferTokensInstruction::try_new(
             quote_fees,
             &self.quote_mint,
-            &self.fee_authority_quote_account,
+            self.fee_authority_quote_account.to_account_info(),
             self.cp_amm.to_account_info(),
-            &self.cp_amm_quote_vault,
+            self.cp_amm_quote_vault.to_account_info(),
             &self.quote_token_program
         )
     }
 }
 
-pub(crate) fn handler(ctx: Context<CollectFeesFromCpAmm>) -> Result<()> {
-    let collect_fees_payload = ctx.accounts.cp_amm.get_collect_fees_payload()?;
-    let (protocol_base_fees_to_redeem, protocol_quote_fees_to_redeem) = (collect_fees_payload.protocol_base_fees_to_redeem(), collect_fees_payload.protocol_quote_fees_to_redeem());
-    
-    let cp_amm_seeds = ctx.accounts.cp_amm.seeds();
-    let collect_fees_instruction_seeds: &[&[&[u8]]] = &[&cp_amm_seeds];
-    
-    if protocol_base_fees_to_redeem > 0{
-        let collect_base_fees_instruction = Box::new(ctx.accounts.get_collect_base_fees_transfer_instruction(protocol_base_fees_to_redeem)?);
-        collect_base_fees_instruction.execute(Some(collect_fees_instruction_seeds))?;
-    }
-    if protocol_quote_fees_to_redeem > 0{
-        let collect_quote_fees_instruction = Box::new(ctx.accounts.get_collect_quote_fees_transfer_instruction(protocol_quote_fees_to_redeem)?);
-        collect_quote_fees_instruction.execute(Some(collect_fees_instruction_seeds))?;
-    }
-    
-    ctx.accounts.cp_amm.collect_fees(collect_fees_payload);
-    Ok(())
-}

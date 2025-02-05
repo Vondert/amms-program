@@ -1,20 +1,14 @@
 import {
-    Account,
-    generateKeyPairSigner,
-    KeyPairSigner, none,
-    pipe,
-    ProgramDerivedAddress, some
+    Account, generateKeyPairSigner, KeyPairSigner, none,
+    pipe, ProgramDerivedAddress, Some, some
 } from "@solana/web3.js";
 import {SYSTEM_PROGRAM_ADDRESS} from "@solana-program/system";
 import {
-    ASSOCIATED_TOKEN_PROGRAM_ADDRESS, fetchMint, findAssociatedTokenPda,
-    Mint as TokenMint,
-    Token as TokenAccount,
-    TOKEN_PROGRAM_ADDRESS
+    ASSOCIATED_TOKEN_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS, fetchMint, findAssociatedTokenPda,
+    Mint as TokenMint, Token as TokenAccount,
 } from "@solana-program/token";
 import {
-    Mint as Token22Mint,
-    Token as Token22Account
+    Mint as Token22Mint, Token as Token22Account, fetchMint as fetchMint22, Extension,
 } from "@solana-program/token-2022";
 import {assert} from "chai";
 import {before, describe} from "mocha";
@@ -596,7 +590,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
         // Launch CpAmm
 
-        it("Launch CpAmm with token mint and token 2022", async () => {
+        it("Launch CpAmm with token mint and token 2022 mint", async () => {
             const [cpAmmAccountBefore, signerBaseBalanceBefore, signerQuoteBalanceBefore] = await Promise.all([
                 fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm1[0]),
                 rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken1.address).send(),
@@ -645,7 +639,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
                 (tx) => signAndSendTransaction(rpcClient, tx)
             );
 
-            const cpAmmAccountAfter = await fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm1[0]);
+            const cpAmmAccountAfter = await fetchCpAmm(rpcClient.rpc, cpAmmAccountBefore.address);
 
             const [lpMintAccountAfter, signerBaseBalanceAfter, signerQuoteBalanceAfter, signerLpBalanceAfter, cpAmmBaseBalance, cpAmmQuoteBalance, cpAmmLpBalance] = await Promise.all([
                 fetchMint(rpcClient.rpc, cpAmmAccountAfter.data.lpMint),
@@ -690,8 +684,248 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
             assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, {value: [[ 11569318178613274784n, 12626128898751551786n, 0n ]]}, "Base quote ratio sqrt mismatch");
             assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, {value: [[ 11035359224094822028n, 1696597754053898133n, 310231742n ]]}, "Constant product sqrt mismatch");
+        })
+
+        it("Relaunching of CpAmm should fail", async () => {
+            const cpAmmAccountBefore = await fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm1[0]);
+            const [baseMint, quoteMint] = await Promise.all([
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.baseMint),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint)
+            ]);
+
+            const baseLiquidity = BigInt(212342403);
+            const quoteLiquidity = BigInt(453247832);
+
+            const input: LaunchCpAmmInput = {
+                ammsConfig: ammsConfigAddress[0],
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                baseLiquidity,
+                baseMint: cpAmmAccountBefore.data.baseMint,
+                cpAmm: cpAmmAccountBefore.address,
+                cpAmmBaseVault: TEST_CP_AMMS.baseVault1[0],
+                cpAmmLockedLpVault: TEST_CP_AMMS.lpVault1[0],
+                cpAmmQuoteVault: TEST_CP_AMMS.quoteVault1[0],
+                lpMint: cpAmmAccountBefore.data.lpMint,
+                quoteLiquidity,
+                quoteMint: cpAmmAccountBefore.data.quoteMint,
+                signer: user,
+                signerBaseAccount: USER_TOKEN_ACCOUNTS.validToken1.address,
+                signerLpAccount:  USER_TOKEN_ACCOUNTS.lpToken1[0],
+                signerQuoteAccount:  USER_TOKEN_ACCOUNTS.validToken221.address,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                baseTokenProgram: baseMint.programAddress,
+                lpTokenProgram: TOKEN_PROGRAM_ADDRESS,
+                quoteTokenProgram: quoteMint.programAddress,
+            }
+
+            const ix = getLaunchCpAmmInstruction(input);
+
+            pipe(
+                await createTransactionWithComputeUnits(rpcClient, owner, [ix], 350_000),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            ).then(() => assert.fail("Expected failure of CpAmm relaunching")).catch();
+        })
+
+        it("Launch CpAmm with two token mints", async () => {
+            const [cpAmmAccountBefore, signerBaseBalanceBefore, signerQuoteBalanceBefore] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm2[0]),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken2.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken3.address).send()
+            ]);
+            const [baseMint, quoteMint] = await Promise.all([
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.baseMint),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint)
+            ]);
+
+            const baseLiquidity = BigInt(160000);
+            const quoteLiquidity = BigInt(1_000_000);
+            const totalLiquidity = BigInt(Math.floor(Math.sqrt(Number(baseLiquidity * quoteLiquidity))));
+
+            const lpMintAccountBefore = await fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.lpMint);
+
+            const initialLockedLiquidity = BigInt(Math.pow(10, lpMintAccountBefore.data.decimals));
+            const signersLiquidity = totalLiquidity - initialLockedLiquidity;
+
+            const input: LaunchCpAmmInput = {
+                ammsConfig: ammsConfigAddress[0],
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                baseLiquidity,
+                baseMint: cpAmmAccountBefore.data.baseMint,
+                cpAmm: cpAmmAccountBefore.address,
+                cpAmmBaseVault: TEST_CP_AMMS.baseVault2[0],
+                cpAmmLockedLpVault: TEST_CP_AMMS.lpVault2[0],
+                cpAmmQuoteVault: TEST_CP_AMMS.quoteVault2[0],
+                lpMint: cpAmmAccountBefore.data.lpMint,
+                quoteLiquidity,
+                quoteMint: cpAmmAccountBefore.data.quoteMint,
+                signer: user,
+                signerBaseAccount: USER_TOKEN_ACCOUNTS.validToken2.address,
+                signerLpAccount:  USER_TOKEN_ACCOUNTS.lpToken2[0],
+                signerQuoteAccount:  USER_TOKEN_ACCOUNTS.validToken3.address,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                baseTokenProgram: baseMint.programAddress,
+                lpTokenProgram: TOKEN_PROGRAM_ADDRESS,
+                quoteTokenProgram: quoteMint.programAddress,
+            }
+
+            const ix = getLaunchCpAmmInstruction(input);
+
+            await pipe(
+                await createTransactionWithComputeUnits(rpcClient, owner, [ix], 350_000),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            );
+
+            const cpAmmAccountAfter = await fetchCpAmm(rpcClient.rpc, cpAmmAccountBefore.address);
+
+            const [lpMintAccountAfter, signerBaseBalanceAfter, signerQuoteBalanceAfter, signerLpBalanceAfter, cpAmmBaseBalance, cpAmmQuoteBalance, cpAmmLpBalance] = await Promise.all([
+                fetchMint(rpcClient.rpc, cpAmmAccountAfter.data.lpMint),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken2.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken3.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.lpToken2[0]).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountAfter.data.baseVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountAfter.data.quoteVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountAfter.data.lockedLpVault).send()
+            ]);
+
+            assert.strictEqual(BigInt(signerBaseBalanceBefore.value.amount) - BigInt(signerBaseBalanceAfter.value.amount), baseLiquidity, "Signer base balance does not match expected value");
+            assert.strictEqual(BigInt(signerQuoteBalanceBefore.value.amount) - BigInt(signerQuoteBalanceAfter.value.amount), quoteLiquidity, "Signer quote balance does not match expected value");
+            assert.strictEqual(BigInt(signerLpBalanceAfter.value.amount), signersLiquidity, "Signer lp balance does not match expected value");
+
+            assert.strictEqual(BigInt(cpAmmBaseBalance.value.amount), baseLiquidity, "CpAmm base balance does not match expected value");
+            assert.strictEqual(BigInt(cpAmmQuoteBalance.value.amount), quoteLiquidity, "CpAmm quote balance does not match expected value");
+            assert.strictEqual(BigInt(cpAmmLpBalance.value.amount), initialLockedLiquidity, "CpAmm locked lp balance does not match expected value");
+
+            assert.strictEqual(lpMintAccountAfter.data.supply, totalLiquidity, "LP mint supply is incorrect");
+
+            assert.strictEqual(cpAmmAccountBefore.data.ammsConfig, cpAmmAccountAfter.data.ammsConfig,  "AMMs config address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseMint, cpAmmAccountAfter.data.baseMint, "Base mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lpMint, cpAmmAccountAfter.data.lpMint, "LP mint address should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountAfter.data.baseVault, TEST_CP_AMMS.baseVault2[0], "Base vault address mismatch");
+            assert.strictEqual(cpAmmAccountAfter.data.quoteVault, TEST_CP_AMMS.quoteVault2[0], "Quote vault address mismatch");
+            assert.strictEqual(cpAmmAccountAfter.data.lockedLpVault, TEST_CP_AMMS.lpVault2[0], "LP vault address mismatch");
+
+            assert.strictEqual(cpAmmAccountBefore.data.protocolBaseFeesToRedeem, cpAmmAccountAfter.data.protocolBaseFeesToRedeem, "Protocol base fees should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.protocolQuoteFeesToRedeem, cpAmmAccountAfter.data.protocolQuoteFeesToRedeem, "Protocol quote fees should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.bump[0], TEST_CP_AMMS.cpAmm2[1].valueOf(), "Bump value should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
+            assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
+
+            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, initialLockedLiquidity, `Initial locked liquidity should be ${initialLockedLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, totalLiquidity, `LP token supply should be ${totalLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity, baseLiquidity, `Base liquidity should be ${baseLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity, quoteLiquidity, `Quote liquidity should be ${quoteLiquidity}`);
+
+            assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, {value: [[ 7378697629483820645n, 7378697629483820646n, 0n ] ]}, "Base quote ratio sqrt mismatch");
+            assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, {value: [[ 0n, 0n, 400000n ]]}, "Constant product sqrt mismatch");
 
         })
+
+        it("Launch CpAmm with token mint and token 2022 mint with TransferFee Config extension", async () => {
+            const [cpAmmAccountBefore, signerBaseBalanceBefore, signerQuoteBalanceBefore] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm3[0]),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken2.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.transferFeeToken22.address).send()
+            ]);
+            const [baseMint, quoteMint] = await Promise.all([
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.baseMint),
+                fetchMint22(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint),
+            ]);
+
+            const baseLiquidity = BigInt(5465487548754);
+            const quoteLiquidity = BigInt(983129578946);
+
+            const transferFee = (quoteMint.data.extensions as Some<Extension[]>).value.find((extension) => extension.__kind == "TransferFeeConfig").olderTransferFee;
+            const quoteFee = (quoteLiquidity * BigInt(transferFee.transferFeeBasisPoints) / BigInt(10_000)) < BigInt(transferFee.maximumFee)
+                ? (quoteLiquidity * BigInt(transferFee.transferFeeBasisPoints) / BigInt(10_000))
+                : BigInt(transferFee.maximumFee);
+
+            const totalLiquidity = BigInt(Math.floor(Math.sqrt(Number(baseLiquidity * (quoteLiquidity - quoteFee)))));
+
+            const lpMintAccountBefore = await fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.lpMint);
+
+            const initialLockedLiquidity = BigInt(Math.pow(10, lpMintAccountBefore.data.decimals));
+            const signersLiquidity = totalLiquidity - initialLockedLiquidity;
+
+            const input: LaunchCpAmmInput = {
+                ammsConfig: ammsConfigAddress[0],
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                baseLiquidity,
+                baseMint: cpAmmAccountBefore.data.baseMint,
+                cpAmm: cpAmmAccountBefore.address,
+                cpAmmBaseVault: TEST_CP_AMMS.baseVault3[0],
+                cpAmmLockedLpVault: TEST_CP_AMMS.lpVault3[0],
+                cpAmmQuoteVault: TEST_CP_AMMS.quoteVault3[0],
+                lpMint: cpAmmAccountBefore.data.lpMint,
+                quoteLiquidity,
+                quoteMint: cpAmmAccountBefore.data.quoteMint,
+                signer: user,
+                signerBaseAccount: USER_TOKEN_ACCOUNTS.validToken2.address,
+                signerLpAccount:  USER_TOKEN_ACCOUNTS.lpToken3[0],
+                signerQuoteAccount:  USER_TOKEN_ACCOUNTS.transferFeeToken22.address,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                baseTokenProgram: baseMint.programAddress,
+                lpTokenProgram: TOKEN_PROGRAM_ADDRESS,
+                quoteTokenProgram: quoteMint.programAddress,
+            }
+
+            const ix = getLaunchCpAmmInstruction(input);
+
+            await pipe(
+                await createTransactionWithComputeUnits(rpcClient, owner, [ix], 350_000),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            );
+
+            const cpAmmAccountAfter = await fetchCpAmm(rpcClient.rpc, cpAmmAccountBefore.address);
+
+            const [lpMintAccountAfter, signerBaseBalanceAfter, signerQuoteBalanceAfter, signerLpBalanceAfter, cpAmmBaseBalance, cpAmmQuoteBalance, cpAmmLpBalance] = await Promise.all([
+                fetchMint(rpcClient.rpc, cpAmmAccountAfter.data.lpMint),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken2.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.transferFeeToken22.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.lpToken3[0]).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountAfter.data.baseVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountAfter.data.quoteVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountAfter.data.lockedLpVault).send()
+            ]);
+
+            assert.strictEqual(BigInt(signerBaseBalanceBefore.value.amount) - BigInt(signerBaseBalanceAfter.value.amount), baseLiquidity, "Signer base balance does not match expected value");
+            assert.strictEqual(BigInt(signerQuoteBalanceBefore.value.amount) - BigInt(signerQuoteBalanceAfter.value.amount), quoteLiquidity, "Signer quote balance does not match expected value");
+            assert.strictEqual(BigInt(signerLpBalanceAfter.value.amount), signersLiquidity, "Signer lp balance does not match expected value");
+
+            assert.strictEqual(BigInt(cpAmmBaseBalance.value.amount), baseLiquidity, "CpAmm base balance does not match expected value");
+            assert.strictEqual(BigInt(cpAmmQuoteBalance.value.amount), quoteLiquidity - quoteFee, "CpAmm quote balance does not match expected value");
+            assert.strictEqual(BigInt(cpAmmLpBalance.value.amount), initialLockedLiquidity, "CpAmm locked lp balance does not match expected value");
+
+            assert.strictEqual(lpMintAccountAfter.data.supply, totalLiquidity, "LP mint supply is incorrect");
+
+            assert.strictEqual(cpAmmAccountBefore.data.ammsConfig, cpAmmAccountAfter.data.ammsConfig,  "AMMs config address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseMint, cpAmmAccountAfter.data.baseMint, "Base mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lpMint, cpAmmAccountAfter.data.lpMint, "LP mint address should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountAfter.data.baseVault, TEST_CP_AMMS.baseVault3[0], "Base vault address mismatch");
+            assert.strictEqual(cpAmmAccountAfter.data.quoteVault, TEST_CP_AMMS.quoteVault3[0], "Quote vault address mismatch");
+            assert.strictEqual(cpAmmAccountAfter.data.lockedLpVault, TEST_CP_AMMS.lpVault3[0], "LP vault address mismatch");
+
+            assert.strictEqual(cpAmmAccountBefore.data.protocolBaseFeesToRedeem, cpAmmAccountAfter.data.protocolBaseFeesToRedeem, "Protocol base fees should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.protocolQuoteFeesToRedeem, cpAmmAccountAfter.data.protocolQuoteFeesToRedeem, "Protocol quote fees should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.bump[0], TEST_CP_AMMS.cpAmm3[1].valueOf(), "Bump value should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
+            assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
+
+            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, initialLockedLiquidity, `Initial locked liquidity should be ${initialLockedLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, totalLiquidity, `LP token supply should be ${totalLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity, baseLiquidity, `Base liquidity should be ${baseLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity, quoteLiquidity - quoteFee, `Quote liquidity should be ${quoteLiquidity - quoteFee}`);
+
+            assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, {value: [[ 3475547461318636948n, 6600456554340055308n, 2n ]]}, "Base quote ratio sqrt mismatch");
+            assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, {value: [[ 16463856578203948456n, 17179385210221578158n, 2318034170991n ]]}, "Constant product sqrt mismatch");
+
+        })
+
 
         // Provide CpAmm
 

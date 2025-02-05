@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::{token, token::{Mint, Token, TokenAccount}, token_interface};
+use anchor_spl::{token::{Mint, Token, TokenAccount}, token_interface};
 use crate::constants::CP_AMM_INITIALIZE_PRICE_IN_LAMPORTS;
 use crate::state::{AmmsConfig, cp_amm::{
     CpAmm, 

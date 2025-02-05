@@ -411,6 +411,7 @@ impl Q64_128 {
 	/// An `Option<Q64_128>`:
 	/// - `Some(Q64_128)` containing the square of the value.
 	/// - `None` if the result overflows.
+	#[cfg(test)]
 	fn square(self) -> Option<Self> {
 		let square_as_u384 = self.square_as_u384();
 		if self.is_zero() || self.is_one() {

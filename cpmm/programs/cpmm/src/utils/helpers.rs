@@ -13,7 +13,7 @@ const ALLOWED_TOKEN_EXTENSIONS: &[ExtensionType] = &[
     ExtensionType::TransferFeeConfig,
     ExtensionType::ImmutableOwner,
    // ExtensionType::ConfidentialTransferMint,
-    ExtensionType::MemoTransfer,
+   // ExtensionType::MemoTransfer,
     ExtensionType::InterestBearingConfig,
     ExtensionType::TransferHook,
     ExtensionType::MetadataPointer,

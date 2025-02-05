@@ -105,6 +105,7 @@ impl U384 {
 	/// An `Option<Q64_128>`:
 	/// - `Some(Q64_128)` if the value fits within the bounds of `Q64_128`.
 	/// - `None` if the value overflows.
+	#[cfg(test)]
 	pub fn q128_256_to_q64_128_round(&self) -> Option<Q64_128> {
 		if self.leading_zeros() < 64 {
 			return None;

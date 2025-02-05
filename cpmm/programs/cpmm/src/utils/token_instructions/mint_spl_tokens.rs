@@ -1,8 +1,7 @@
 use anchor_lang::context::CpiContext;
 use anchor_lang::prelude::*;
 use anchor_lang::ToAccountInfo;
-use anchor_spl::token::{mint_to, MintTo, Mint, Token, TokenAccount};
-use crate::error::ErrorCode;
+use anchor_spl::token::{mint_to, MintTo, Mint, Token};
 
 
 /// Represents an instruction to mint tokens to a specified token account.
@@ -25,25 +24,19 @@ impl<'at, 'bt, 'ct, 'info> MintTokensInstructions<'at, 'bt, 'ct, 'info> {
     /// - `mint_authority`: The authority allowed to mint tokens.
     /// - `to`: The destination token account where tokens will be minted.
     /// - `token_program`: The SPL token program responsible for handling the mint operation.
-    ///
-    /// Returns:
-    /// - `Ok(Self)` if the instance is successfully created.
-    /// - `Err(ErrorCode)` if the validation fails (e.g., supply overflow).
-    pub fn new(amount: u64, mint: &Account<'info, Mint>, mint_authority: AccountInfo<'info>, to: &Account<'info, TokenAccount>, token_program: &Program<'info, Token>) -> Result<Self>{
-        require!(mint.supply.checked_add(amount).is_some(), ErrorCode::LiquidityMintOverflow);
-        
+    pub fn new(amount: u64, mint: &Account<'info, Mint>, mint_authority: AccountInfo<'info>, to: AccountInfo<'info>, token_program: &Program<'info, Token>) -> Self{
         let cpi_context = CpiContext::new(
             token_program.to_account_info(), 
             MintTo{
                 mint: mint.to_account_info(),
-                to: to.to_account_info(),
+                to,
                 authority: mint_authority,
             }
         );
-        Ok(MintTokensInstructions{
+        MintTokensInstructions{
             amount,
             cpi_context,
-        })
+        }
     }
 
     /// Executes the mint operation.

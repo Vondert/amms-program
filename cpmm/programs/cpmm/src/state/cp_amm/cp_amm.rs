@@ -1,6 +1,6 @@
 use anchor_lang::{account, InitSpace};
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, TokenAccount};
+use anchor_spl::token::{Mint};
 use anchor_spl::token_interface;
 use crate::utils::math::Q64_128;
 use crate::error::ErrorCode;
@@ -14,6 +14,7 @@ use super::{CpAmmCalculate, CpAmmCore};
 ///
 /// The AMM maintains the constant product invariant, which ensures that
 /// the product of the pool's base and quote liquidity remains constant during swaps.
+
 #[account]
 #[derive(InitSpace)]
 pub struct CpAmm {
@@ -210,6 +211,7 @@ impl CpAmm {
     /// # Returns
     /// - `Ok(LaunchPayload)` containing the calculated launch details.
     /// - `Err(ErrorCode)` if any preconditions fail or calculations encounter errors.
+    #[inline(never)]
     pub fn get_launch_payload(&self, base_liquidity: u64, quote_liquidity: u64) -> Result<LaunchPayload> {
         require!(!self.is_launched, ErrorCode::CpAmmAlreadyLaunched);
         require!(self.is_initialized, ErrorCode::CpAmmNotInitialized);
@@ -241,6 +243,7 @@ impl CpAmm {
     /// # Returns
     /// - `Ok(ProvidePayload)` containing the updated pool state and LP tokens to mint.
     /// - `Err(ErrorCode)` if any checks fail or calculations encounter errors.
+    #[inline(never)]
     pub fn get_provide_payload(&self, base_liquidity: u64, quote_liquidity: u64) -> Result<ProvidePayload> {
         self.check_state()?;
         require!(base_liquidity > 0, ErrorCode::ProvidedBaseLiquidityIsZero);
@@ -275,6 +278,7 @@ impl CpAmm {
     /// # Returns
     /// - `Ok(WithdrawPayload)` containing the updated pool state and withdrawn liquidity amounts.
     /// - `Err(ErrorCode)` if any checks fail or calculations encounter errors.
+    #[inline(never)]
     pub fn get_withdraw_payload(&self, lp_tokens: u64) -> Result<WithdrawPayload> {
         self.check_state()?;
         require!(lp_tokens > 0, ErrorCode::ProvidedLpTokensIsZero);
@@ -316,6 +320,7 @@ impl CpAmm {
     /// # Returns
     /// - `Ok(SwapPayload)`: Contains the updated liquidity state and fees.
     /// - `Err(ErrorCode)`: If any validation fails (e.g., insufficient liquidity, overflow, or slippage exceeded).
+    #[inline(never)]
     pub fn get_swap_payload(&self, swap_amount: u64, estimated_result: u64, allowed_slippage: u64, providers_fee_rate_basis_points: u16, protocol_fee_rate_basis_points: u16, is_in_out: bool) -> Result<SwapPayload> {
         self.check_state()?;
         require!(swap_amount > 0, ErrorCode::SwapAmountIsZero);
@@ -360,7 +365,7 @@ impl CpAmm {
     /// # Returns
     /// - `Ok(CollectFeesPayload)`: Contains the protocol fees available for redemption for both base and quote tokens.
     /// - `Err(ErrorCode::ProvidersFeesIsZero)`: If both `protocol_base_fees_to_redeem` and `protocol_quote_fees_to_redeem` are zero, meaning no fees are available to collect.
-    #[inline]
+    #[inline(never)]
     pub fn get_collect_fees_payload(&self) -> Result<CollectFeesPayload>{
         require!(self.protocol_base_fees_to_redeem > 0 || self.protocol_quote_fees_to_redeem > 0, ErrorCode::ProvidersFeesIsZero);
         Ok(CollectFeesPayload::new(
@@ -390,6 +395,7 @@ impl CpAmm {
     /// # Returns
     /// - `Ok(())` if the initialization is successful.
     /// - `Err(ErrorCode)` if the AMM is already initialized.
+    #[inline(never)]
     pub fn initialize(
         &mut self,
         base_mint: &InterfaceAccount<token_interface::Mint>,
@@ -419,13 +425,14 @@ impl CpAmm {
     ///
     /// # Parameters
     /// - `launch_payload`: Contains the initial liquidity, LP token supply, and ratios.
-    /// - `base_vault`: The vault holding the base tokens.
-    /// - `quote_vault`: The vault holding the quote tokens.
-    /// - `locked_lp_vault`: The vault holding locked LP tokens.
+    /// - `base_vault`: Pubkey of the vault holding the base tokens.
+    /// - `quote_vault`: Pubkey of the vault holding the quote tokens.
+    /// - `locked_lp_vault`: Pubkey of the vault holding locked LP tokens.
     ///
     /// # Returns
     /// - No return value. Modifies the internal state of the AMM.
-    pub(crate) fn launch(&mut self, launch_payload: LaunchPayload, base_vault: &InterfaceAccount<token_interface::TokenAccount>, quote_vault: &InterfaceAccount<token_interface::TokenAccount>, locked_lp_vault: &Account<TokenAccount>) -> (){
+    #[inline(never)]
+    pub(crate) fn launch(&mut self, launch_payload: LaunchPayload, base_vault: Pubkey, quote_vault: Pubkey, locked_lp_vault: Pubkey) -> (){
         self.is_launched = true;
         self.base_liquidity = launch_payload.base_liquidity;
         self.quote_liquidity = launch_payload.quote_liquidity;
@@ -448,6 +455,7 @@ impl CpAmm {
     ///
     /// # Returns
     /// - No return value. Modifies the internal state of the AMM.
+    #[inline(never)]
     pub(crate) fn provide(&mut self, provide_payload: ProvidePayload) -> (){
         self.base_liquidity = provide_payload.base_liquidity;
         self.quote_liquidity = provide_payload.quote_liquidity;
@@ -466,6 +474,7 @@ impl CpAmm {
     ///
     /// # Returns
     /// - No return value. Modifies the internal state of the AMM.
+    #[inline(never)]
     pub(crate) fn withdraw(&mut self, withdraw_payload: WithdrawPayload) -> (){
         self.base_liquidity = withdraw_payload.base_liquidity;
         self.quote_liquidity = withdraw_payload.quote_liquidity;
@@ -485,6 +494,7 @@ impl CpAmm {
     ///
     /// # Returns
     /// - No return value. Modifies the internal state of the AMM.
+    #[inline(never)]
     pub(crate) fn swap(&mut self, swap_payload: SwapPayload) {
         self.base_liquidity = swap_payload.base_liquidity;
         self.quote_liquidity = swap_payload.quote_liquidity;
@@ -511,6 +521,7 @@ impl CpAmm {
     ///
     /// # Returns
     /// - None. This method directly modifies the internal state of the AMM.
+    #[inline(never)]
     pub(crate) fn collect_fees(&mut self, collect_fees_payload: CollectFeesPayload) {
         self.protocol_base_fees_to_redeem = collect_fees_payload.new_protocol_base_fees_to_redeem;
         self.protocol_quote_fees_to_redeem = collect_fees_payload.new_protocol_quote_fees_to_redeem;
@@ -786,6 +797,37 @@ mod cp_amm_tests {
     mod state_change_tests {
         use super::*;
 
+        /// Tests the `launch` method of `CpAmm`.
+        #[test]
+        fn test_launch() {
+            let mut amm = CpAmmBuilder::new().build();
+
+            let launch_payload = LaunchPayload::new(
+                100000,
+                Q64_128::from_u64(400000),
+                Q64_128::from_u64(1),
+                400000,
+                400000,
+                400000,
+            );
+            let base_vault = Pubkey::new_unique();
+            let quote_vault = Pubkey::new_unique();
+            let locked_lp_vault = Pubkey::new_unique();
+            
+            amm.launch(launch_payload, base_vault, quote_vault, locked_lp_vault);
+
+            assert!(amm.is_launched);
+            assert_eq!(amm.base_liquidity, 400000);
+            assert_eq!(amm.quote_liquidity, 400000);
+            assert_eq!(amm.lp_tokens_supply, 400000);
+            assert_eq!(amm.initial_locked_liquidity, 100000);
+            assert_eq!(amm.base_quote_ratio_sqrt, Q64_128::from_u64(1));
+            assert_eq!(amm.constant_product_sqrt, Q64_128::from_u64(400000));
+            assert_eq!(amm.base_vault, base_vault);
+            assert_eq!(amm.quote_vault, quote_vault);
+            assert_eq!(amm.locked_lp_vault, locked_lp_vault);
+        }
+        
         /// Tests the `provide` method of `CpAmm`.
         #[test]
         fn test_provide() {

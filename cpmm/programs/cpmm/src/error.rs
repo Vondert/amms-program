@@ -110,7 +110,7 @@ pub enum ErrorCode {
     #[msg("Insufficient balance in the token account to complete the token_instructions.")]
     InsufficientBalanceForTransfer,
 
-    #[msg("Mint and Token Program mismatch in transfer instruction")]
+    #[msg("Mint and Token Program mismatch")]
     MintAndTokenProgramMismatch,
     
     #[msg("Minting the requested amount of liquidity tokens cause supply overflow.")]

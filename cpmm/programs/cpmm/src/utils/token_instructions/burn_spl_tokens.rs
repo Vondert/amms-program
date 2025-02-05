@@ -1,8 +1,7 @@
 use anchor_lang::context::CpiContext;
 use anchor_lang::prelude::*;
 use anchor_lang::ToAccountInfo;
-use anchor_spl::token::{Mint, Token, TokenAccount, Burn, burn};
-use crate::error::ErrorCode;
+use anchor_spl::token::{Mint, Token, Burn, burn};
 
 /// Represents an instruction to burn tokens from a token account.
 ///
@@ -24,25 +23,19 @@ impl<'at, 'bt, 'ct, 'info> BurnTokensInstructions<'at, 'bt, 'ct, 'info> {
     /// - `from`: The token account from which tokens will be burned.
     /// - `from_authority`: The authority of the token account.
     /// - `token_program`: The SPL token program responsible for handling the burn operation.
-    ///
-    /// Returns:
-    /// - `Ok(Self)` if the instance is successfully created.
-    /// - `Err(ErrorCode)` if the validation fails (e.g., supply overflow).
-    pub fn new(amount: u64, mint: &Account<'info, Mint>, from: &Account<'info, TokenAccount>, from_authority: AccountInfo<'info>, token_program: &Program<'info, Token>) -> Result<Self>{
-        require!(mint.supply >= amount, ErrorCode::LiquidityBurnOverflow);
-
+    pub fn new(amount: u64, mint: &Account<'info, Mint>, from: AccountInfo<'info>, from_authority: AccountInfo<'info>, token_program: &Program<'info, Token>) -> Self{
         let cpi_context = CpiContext::new(
             token_program.to_account_info(),
             Burn{
                 mint: mint.to_account_info(),
-                from: from.to_account_info(),
+                from,
                 authority: from_authority,
             }
         );
-        Ok(BurnTokensInstructions{
+        BurnTokensInstructions{
             amount,
             cpi_context,
-        })
+        }
     }
 
 

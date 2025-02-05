@@ -63,38 +63,6 @@ pub struct ProvideToCpAmm<'info>{
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> ProvideToCpAmm<'info>{
-    fn get_provide_base_liquidity_transfer_instruction(&self, base_liquidity: u64) -> Result<TransferTokensInstruction<'_, '_, '_, 'info>>{
-        TransferTokensInstruction::new(
-            base_liquidity,
-            &self.base_mint,
-            &self.signer_base_account,
-            self.signer.to_account_info(),
-            &self.cp_amm_base_vault,
-            &self.base_token_program
-        )
-    }
-    fn get_provide_quote_liquidity_transfer_instruction(&self, quote_liquidity: u64) -> Result<TransferTokensInstruction<'_, '_, '_, 'info>>{
-        TransferTokensInstruction::new(
-            quote_liquidity,
-            &self.quote_mint,
-            &self.signer_quote_account,
-            self.signer.to_account_info(),
-            &self.cp_amm_quote_vault,
-            &self.quote_token_program
-        )
-    }
-    fn get_liquidity_mint_instruction(&self, liquidity: u64) -> Result<MintTokensInstructions<'_, '_, '_, 'info>>{
-        MintTokensInstructions::new(
-            liquidity,
-            &self.lp_mint,
-            self.cp_amm.to_account_info(),
-            &self.signer_lp_account,
-            &self.lp_token_program
-        )
-    }
-}
-
 pub(crate) fn handler(ctx: Context<ProvideToCpAmm>, base_liquidity: u64, quote_liquidity: u64) -> Result<()> {
 
     let provide_base_liquidity_instruction = Box::new(ctx.accounts.get_provide_base_liquidity_transfer_instruction(base_liquidity)?);
@@ -102,20 +70,52 @@ pub(crate) fn handler(ctx: Context<ProvideToCpAmm>, base_liquidity: u64, quote_l
 
     let base_liquidity_to_provide = provide_base_liquidity_instruction.get_amount_after_fee();
     let quote_liquidity_to_provide = provide_quote_liquidity_instruction.get_amount_after_fee();
-    
+
     let provide_payload = ctx.accounts.cp_amm.get_provide_payload(base_liquidity_to_provide, quote_liquidity_to_provide)?;
 
     provide_base_liquidity_instruction.execute(None)?;
     provide_quote_liquidity_instruction.execute(None)?;
 
-    let liquidity_mint_instruction = Box::new(ctx.accounts.get_liquidity_mint_instruction(provide_payload.lp_tokens_to_mint())?);
+    let liquidity_mint_instruction = Box::new(ctx.accounts.get_liquidity_mint_instruction(provide_payload.lp_tokens_to_mint()));
 
     let cp_amm_seeds = ctx.accounts.cp_amm.seeds();
     let mint_instruction_seeds: &[&[&[u8]]] = &[&cp_amm_seeds];
 
     liquidity_mint_instruction.execute(Some(mint_instruction_seeds))?;
-    
+
     ctx.accounts.cp_amm.provide(provide_payload);
-    
+
     Ok(())
+}
+
+impl<'info> ProvideToCpAmm<'info> {
+    fn get_provide_base_liquidity_transfer_instruction(&self, base_liquidity: u64) -> Result<TransferTokensInstruction<'_, '_, '_, 'info>> {
+        TransferTokensInstruction::try_new(
+            base_liquidity,
+            &self.base_mint,
+            self.signer_base_account.to_account_info(),
+            self.signer.to_account_info(),
+            self.cp_amm_base_vault.to_account_info(),
+            &self.base_token_program
+        )
+    }
+    fn get_provide_quote_liquidity_transfer_instruction(&self, quote_liquidity: u64) -> Result<TransferTokensInstruction<'_, '_, '_, 'info>>{
+        TransferTokensInstruction::try_new(
+            quote_liquidity,
+            &self.quote_mint,
+            self.signer_quote_account.to_account_info(),
+            self.signer.to_account_info(),
+            self.cp_amm_quote_vault.to_account_info(),
+            &self.quote_token_program
+        )
+    }
+    fn get_liquidity_mint_instruction(&self, liquidity: u64) -> MintTokensInstructions<'_, '_, '_, 'info> {
+        MintTokensInstructions::new(
+            liquidity,
+            &self.lp_mint,
+            self.cp_amm.to_account_info(),
+            self.signer_lp_account.to_account_info(),
+            &self.lp_token_program
+        )
+    }
 }

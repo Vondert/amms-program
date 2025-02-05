@@ -5,7 +5,7 @@ resolution = true
 skip-lint = true
 
 [programs.localnet]
-cpmm = "2wFPV42nma7Lv8fqfUEtzBYGoiZybowLxFokaGGMqGCg"
+cpmm = "6nyRQDmzjSqorVVVyFN3AnrqKSS2Lg4UHp3DgnFCAj32"
 
 [registry]
 url = "https://api.apr.dev"
@@ -15,5 +15,5 @@ cluster = "Localnet"
 wallet = "../owner.json"
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 generate-clients = "yarn ts-node ./scripts/generate-clients.ts"
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

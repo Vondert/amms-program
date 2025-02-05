@@ -2,7 +2,7 @@ use anchor_lang::context::CpiContext;
 use anchor_lang::prelude::{AccountInfo, Interface, InterfaceAccount};
 use anchor_lang::ToAccountInfo;
 use anchor_spl::token_2022::{TransferChecked};
-use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+use anchor_spl::token_interface::{Mint, TokenInterface};
 
 /// Represents the context for a regular token transfer without fees.
 ///
@@ -40,17 +40,17 @@ impl<'at, 'bt, 'ct, 'info>  TransferContextRegular<'at, 'bt, 'ct, 'info>  {
     /// - A new `TransferContextRegular` instance initialized for SPL token transfers.
     pub(super) fn new_for_spl_token(
         mint: &InterfaceAccount<'info, Mint>,
-        from: &InterfaceAccount<'info, TokenAccount>,
+        from: AccountInfo<'info>,
         from_authority: AccountInfo<'info>,
-        to: &InterfaceAccount<'info, TokenAccount>,
+        to: AccountInfo<'info>,
         token_program: &Interface<'info, TokenInterface>,
     ) -> Self{
         let cpi_context = CpiContext::new(
             token_program.to_account_info(),
             TransferChecked {
-                from: from.to_account_info(),
+                from: from,
                 mint: mint.to_account_info(),
-                to: to.to_account_info(),
+                to,
                 authority: from_authority,
             }
         );
@@ -71,17 +71,17 @@ impl<'at, 'bt, 'ct, 'info>  TransferContextRegular<'at, 'bt, 'ct, 'info>  {
     /// - A new `TransferContextRegular` instance initialized for SPL Token 2022 transfers.
     pub(super) fn new_for_token_2022(
         mint: &InterfaceAccount<'info, Mint>,
-        from: &InterfaceAccount<'info, TokenAccount>,
+        from: AccountInfo<'info>,
         from_authority: AccountInfo<'info>,
-        to: &InterfaceAccount<'info, TokenAccount>,
+        to: AccountInfo<'info>,
         token_program: &Interface<'info, TokenInterface>,
     ) -> Self{
         let cpi_context = CpiContext::new(
             token_program.to_account_info(),
             TransferChecked {
-                from: from.to_account_info(),
+                from,
                 mint: mint.to_account_info(),
-                to: to.to_account_info(),
+                to,
                 authority: from_authority,
             }
         );
