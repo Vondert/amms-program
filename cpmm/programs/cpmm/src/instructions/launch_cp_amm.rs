@@ -9,8 +9,11 @@ use anchor_spl::associated_token::{
     AssociatedToken
 };
 use crate::state::{AmmsConfig, cp_amm::CpAmm};
-use crate::utils::token_accounts_instructions::{CreateAtaInstruction};
-use crate::utils::token_instructions::{MintTokensInstructions, TransferTokensInstruction};
+use crate::utils::{
+    token_accounts_instructions::{CreateAtaInstruction},
+    token_instructions::{MintTokensInstructions, TransferTokensInstruction}
+};
+use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct LaunchCpAmm<'info>{
@@ -51,25 +54,26 @@ pub struct LaunchCpAmm<'info>{
     )]
     pub cp_amm: Box<Account<'info, CpAmm>>,
 
+    #[account(mut)]
     /// CHECK: This is the ATA for CpAmm to hold base token liquidity.
     ///        - **Validation**: Checked inside `check_or_initialize_cp_amms_vaults()`:
     ///          `get_associated_token_address_with_program_id(cp_amm, quote_mint, quote_token_program)`.
     ///        - **Initialization**: If empty (`data_is_empty()`), it is created using CreateAtaInstruction.
-    pub cp_amm_base_vault: UncheckedAccount<'info>,
+    pub cp_amm_base_vault: AccountInfo<'info>,
 
     #[account(mut)]
     /// CHECK: This is the ATA for CpAmm to hold quote token liquidity.
     ///        - **Validation**: Checked inside `check_or_initialize_cp_amms_vaults()`:
     ///          `get_associated_token_address_with_program_id(cp_amm, base_mint, base_token_program)`.
     ///        - **Initialization**: If empty (`data_is_empty()`), it is created using CreateAtaInstruction.
-    pub cp_amm_quote_vault: UncheckedAccount<'info>,
+    pub cp_amm_quote_vault: AccountInfo<'info>,
 
     #[account(mut)]
     /// CHECK: This is the ATA for CpAmm to store initially locked LP tokens.
     ///        - **Validation**: Checked inside `check_or_initialize_cp_amms_vaults()`:
     ///          `get_associated_token_address_with_program_id(cp_amm, lp_mint, lp_token_program)`.
     ///        - **Initialization**: If empty (`data_is_empty()`), it is created using CreateAtaInstruction.
-    pub cp_amm_locked_lp_vault: UncheckedAccount<'info>,
+    pub cp_amm_locked_lp_vault: AccountInfo<'info>,
     
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub lp_token_program: Program<'info, Token>,
@@ -193,30 +197,31 @@ impl<'info> LaunchCpAmm<'info>{
         )
     }
     
+    #[inline(never)]
     fn check_or_initialize_cp_amms_vaults(&self) -> Result<()>{
         let cp_amm = &self.cp_amm.key();
         require_keys_eq!(self.cp_amm_base_vault.key(),  get_associated_token_address_with_program_id(
             cp_amm,
             &self.base_mint.key(),
             &self.base_token_program.key()
-        ), ErrorCode::AccountNotEnoughKeys);
+        ), ErrorCode::InvalidCpAmmVaultAddress);
         require_keys_eq!(self.cp_amm_quote_vault.key(),  get_associated_token_address_with_program_id(
             cp_amm,
             &self.quote_mint.key(),
             &self.quote_token_program.key()
-        ), ErrorCode::AccountNotEnoughKeys);
+        ), ErrorCode::InvalidCpAmmVaultAddress);
         require_keys_eq!(self.cp_amm_locked_lp_vault.key(),  get_associated_token_address_with_program_id(
             cp_amm,
             &self.lp_mint.key(),
             &self.lp_token_program.key()
-        ), ErrorCode::AccountNotEnoughKeys);
+        ), ErrorCode::InvalidCpAmmVaultAddress);
 
         if self.cp_amm_base_vault.data_is_empty(){
             self.get_create_cp_amm_base_vault_instruction().execute()?;
         }
         {
             let cp_amm_base_vault = InterfaceTokenAccount::try_deserialize(&mut &self.cp_amm_base_vault.try_borrow_data()?[..])?;
-            require_keys_eq!(cp_amm_base_vault.owner, cp_amm.key(), ErrorCode::AccountNotEnoughKeys);
+            require_keys_eq!(cp_amm_base_vault.owner, cp_amm.key(), ErrorCode::InvalidCpAmmVaultOwner);
         }
 
         if self.cp_amm_quote_vault.data_is_empty(){
@@ -224,7 +229,7 @@ impl<'info> LaunchCpAmm<'info>{
         }
         {
             let cp_amm_quote_vault = InterfaceTokenAccount::try_deserialize(&mut &self.cp_amm_quote_vault.try_borrow_data()?[..])?;
-            require_keys_eq!(cp_amm_quote_vault.owner, cp_amm.key(), ErrorCode::AccountNotEnoughKeys);
+            require_keys_eq!(cp_amm_quote_vault.owner, cp_amm.key(), ErrorCode::InvalidCpAmmVaultOwner);
         }
         
         if self.cp_amm_locked_lp_vault.data_is_empty(){
@@ -232,7 +237,7 @@ impl<'info> LaunchCpAmm<'info>{
         }
         {
             let cp_amm_locked_lp_vault = InterfaceTokenAccount::try_deserialize(&mut &self.cp_amm_locked_lp_vault.try_borrow_data()?[..])?;
-            require_keys_eq!(cp_amm_locked_lp_vault.owner, cp_amm.key(), ErrorCode::AccountNotEnoughKeys);
+            require_keys_eq!(cp_amm_locked_lp_vault.owner, cp_amm.key(), ErrorCode::InvalidCpAmmVaultOwner);
         }
         
         Ok(())

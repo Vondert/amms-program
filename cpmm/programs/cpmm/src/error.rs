@@ -2,6 +2,14 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
+    // Accounts validation errors
+
+    #[msg("Invalid CpAmm vault address: expected associated token account does not match.")]
+    InvalidCpAmmVaultAddress,
+
+    #[msg("CpAmm vault owner mismatch: the vault is not owned by the expected program.")]
+    InvalidCpAmmVaultOwner,
+    
     // AmmsConfig
     #[msg("The provided fee rate for AmmsConfig exceeds the maximum allowed value of 10000 basis points (100%).")]
     ConfigFeeRateExceeded,

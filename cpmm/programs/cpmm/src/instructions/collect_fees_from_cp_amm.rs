@@ -10,8 +10,8 @@ pub struct CollectFeesFromCpAmm<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     #[account(mut)]
-    /// CHECK: Amms config's fee authority can be arbitrary
-    pub fee_authority: UncheckedAccount<'info>,
+    /// CHECK: Amms config's fee authority can be arbitrary type
+    pub fee_authority: AccountInfo<'info>,
     pub base_mint: Box<InterfaceAccount<'info, Mint>>,
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
     

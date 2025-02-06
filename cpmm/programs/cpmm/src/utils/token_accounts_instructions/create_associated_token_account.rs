@@ -13,7 +13,6 @@ impl<'at, 'bt, 'ct, 'info> CreateAtaInstruction<'at, 'bt, 'ct, 'info>{
         system_program: &Program<'info, System>,
         token_program: AccountInfo<'info>
     ) -> Self{
-
         let cpi_context = CpiContext::new(
             associated_token_program.to_account_info(), 
             Create {
