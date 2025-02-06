@@ -4,7 +4,7 @@ import {describe} from "mocha";
 import {assert} from "chai";
 import {
     CpmmTestingEnvironment,
-    createTransaction,
+    createTransaction, getTransactionLogs,
     signAndSendTransaction
 } from "./helpers";
 import {
@@ -33,10 +33,16 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
 
             const ix = getInitializeAmmsConfigsManagerInstruction(input);
 
-            pipe(
+            await (pipe(
                 await createTransaction(rpcClient, owner, [ix]),
                 (tx) => signAndSendTransaction(rpcClient, tx)
-            ).then(() => assert.fail("Expected failure of unauthorized attempt of AmmsConfigsManager initialization")).catch();
+            ).then(
+                async (signature) => {
+                    console.log(await getTransactionLogs(rpcClient, signature));
+                    assert.fail("Expected failure of unauthorized attempt of AmmsConfigsManager initialization");
+                },
+                (_error) => {}
+            ));
         })
 
         it("Initialization of AmmsConfigsManager should fail with an invalid head authority", async () => {
@@ -51,10 +57,16 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
 
             const ix = getInitializeAmmsConfigsManagerInstruction(input);
 
-            pipe(
+            await (pipe(
                 await createTransaction(rpcClient, owner, [ix]),
                 (tx) => signAndSendTransaction(rpcClient, tx)
-            ).then(() => assert.fail("Expected to fail initialization of AmmsConfigsManager with an invalid head authority")).catch();
+            ).then(
+                async (signature) => {
+                    console.log(await getTransactionLogs(rpcClient, signature));
+                    assert.fail("Expected to fail initialization of AmmsConfigsManager with an invalid head authority");
+                },
+                (_error) => {}
+            ));
         })
 
         it("Initialize AmmsConfigsManager", async () => {
@@ -95,12 +107,16 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
 
             const ix = getInitializeAmmsConfigsManagerInstruction(input);
 
-            pipe(
+            await (pipe(
                 await createTransaction(rpcClient, owner, [ix]),
                 (tx) => signAndSendTransaction(rpcClient, tx)
-            ).then(() => {
-                assert.fail("Expected failure of reinitialization AmmsConfigsManager");
-            }).catch();
+            ).then(
+                async (signature) => {
+                    console.log(await getTransactionLogs(rpcClient, signature));
+                    assert.fail("Expected failure of reinitialization AmmsConfigsManager");
+                },
+                (_error) => {}
+            ));
         })
 
         // Authority update
@@ -114,10 +130,16 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
 
             const ix = getUpdateAmmsConfigsManagerAuthorityInstruction(input);
 
-            pipe(
+            await (pipe(
                 await createTransaction(rpcClient, owner, [ix]),
                 (tx) => signAndSendTransaction(rpcClient, tx)
-            ).then(() => assert.fail("Expected failure of unauthorized update of AmmsConfigsManager authority")).catch();
+            ).then(
+                async (signature) => {
+                    console.log(await getTransactionLogs(rpcClient, signature));
+                    assert.fail("Expected failure of unauthorized update of AmmsConfigsManager authority");
+                },
+                (_error) => {}
+            ));
         })
 
         it("Update AmmsConfigsManager authority by authority", async () => {
@@ -182,10 +204,16 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
 
             const ix = getUpdateAmmsConfigsManagerHeadAuthorityInstruction(input);
 
-            pipe(
+            await (pipe(
                 await createTransaction(rpcClient, owner, [ix]),
                 (tx) => signAndSendTransaction(rpcClient, tx)
-            ).then(() => assert.fail("Expected failure of unauthorized update of AmmsConfigsManager head authority")).catch();
+            ).then(
+                async (signature) => {
+                    console.log(await getTransactionLogs(rpcClient, signature));
+                    assert.fail("Expected failure of unauthorized update of AmmsConfigsManager head authority");
+                },
+                (_error) => {}
+            ));
         })
 
         it("Update AmmsConfigsManager head authority", async () => {

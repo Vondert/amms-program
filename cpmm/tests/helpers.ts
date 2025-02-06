@@ -25,7 +25,7 @@ import {
     RpcSubscriptions,
     sendAndConfirmTransactionFactory,
     setTransactionMessageFeePayerSigner,
-    setTransactionMessageLifetimeUsingBlockhash,
+    setTransactionMessageLifetimeUsingBlockhash, Signature,
     signTransactionMessageWithSigners,
     SolanaRpcApi,
     SolanaRpcSubscriptionsApi,
@@ -94,6 +94,13 @@ export const signAndSendTransaction = async (
     });
     const signature = getSignatureFromTransaction(signedTransaction);
     return signature;
+};
+
+export const getTransactionLogs = async (
+    rpcClient: RpcClient,
+    signature: Signature
+) => {
+    return (await rpcClient.rpc.getTransaction(signature, {maxSupportedTransactionVersion: 0}).send()).meta.logMessages;
 };
 
 export type CpmmTestingEnvironment = {
