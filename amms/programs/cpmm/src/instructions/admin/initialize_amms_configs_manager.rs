@@ -1,6 +1,6 @@
 use anchor_lang::Accounts;
 use anchor_lang::prelude::*;
-use crate::constants::{AMMS_CONFIG_MANAGER_INITIALIZE_AUTHORITY_PUBKEY, ANCHOR_DISCRIMINATOR};
+use crate::constants::{ANCHOR_DISCRIMINATOR};
 use crate::state::AmmsConfigsManager;
 use crate::program::Cpmm;
 
