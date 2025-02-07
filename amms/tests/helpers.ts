@@ -19,7 +19,7 @@ import {
     IInstruction,
     KeyPairSigner,
     lamports,
-    pipe, prependTransactionMessageInstruction,
+    pipe,
     ProgramDerivedAddress,
     Rpc,
     RpcSubscriptions,
@@ -29,7 +29,7 @@ import {
     signTransactionMessageWithSigners,
     SolanaRpcApi,
     SolanaRpcSubscriptionsApi,
-    TransactionMessageWithBlockhashLifetime
+    TransactionMessageWithBlockhashLifetime,
 } from "@solana/web3.js";
 import * as program from "../clients/js/src/generated";
 import fs from "node:fs";
@@ -105,6 +105,7 @@ export const getTransactionLogs = async (
 
 export type CpmmTestingEnvironment = {
     program: typeof program,
+    programDataAddress: Address,
     rpcClient: RpcClient,
     rent: Address,
     owner: KeyPairSigner,
@@ -122,7 +123,9 @@ export const createCpmmTestingEnvironment = async (): Promise<CpmmTestingEnviron
     const ammsConfigsManagerAuthority = await createTestUser(rpcClient, 100);
     const user = await createTestUser(rpcClient, 100);
     const rent = address("SysvarRent111111111111111111111111111111111");
-    return {rpcClient, headAuthority, owner, program, rent, ammsConfigsManagerAuthority, user};
+    const [programDataAddress] = await getProgramDerivedAddress({programAddress: address('BPFLoaderUpgradeab1e11111111111111111111111'), seeds: [getAddressEncoder().encode(program.CPMM_PROGRAM_ADDRESS)]});
+    //const programDataAddress = program.CPMM_PROGRAM_ADDRESS;
+    return {rpcClient, headAuthority, owner, program, rent, programDataAddress, ammsConfigsManagerAuthority, user};
 };
 
 export const getAmmsConfigsManagerPDA = async (): Promise<ProgramDerivedAddress> =>{

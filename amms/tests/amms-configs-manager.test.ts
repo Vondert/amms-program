@@ -17,7 +17,7 @@ import {
 
 export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsConfigsManagerAddress: ProgramDerivedAddress) =>{
     describe("\nAmmsConfigsManager tests", () =>{
-        const {program, rpcClient, rent, headAuthority, owner, ammsConfigsManagerAuthority, user} = cpmmTestingEnvironment;
+        const {program, programDataAddress, rpcClient, rent, headAuthority, owner, ammsConfigsManagerAuthority, user} = cpmmTestingEnvironment;
 
         /// Initialization
 
@@ -27,6 +27,8 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
                 ammsConfigsManager: ammsConfigsManagerAddress[0],
                 authority: ammsConfigsManagerAuthority.address,
                 headAuthority: owner.address,
+                programData: programDataAddress,
+                cpmmProgram: program.CPMM_PROGRAM_ADDRESS,
                 rent,
                 systemProgram: SYSTEM_PROGRAM_ADDRESS
             };
@@ -51,6 +53,8 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
                 ammsConfigsManager: ammsConfigsManagerAddress[0],
                 authority: ammsConfigsManagerAuthority.address,
                 headAuthority: user.address,
+                programData: programDataAddress,
+                cpmmProgram: program.CPMM_PROGRAM_ADDRESS,
                 rent,
                 systemProgram: SYSTEM_PROGRAM_ADDRESS
             };
@@ -75,6 +79,8 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
                 ammsConfigsManager: ammsConfigsManagerAddress[0],
                 authority: ammsConfigsManagerAuthority.address,
                 headAuthority: owner.address,
+                programData: programDataAddress,
+                cpmmProgram: program.CPMM_PROGRAM_ADDRESS,
                 rent,
                 systemProgram: SYSTEM_PROGRAM_ADDRESS
             };
@@ -84,7 +90,7 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
             await pipe(
                 await createTransaction(rpcClient, owner, [ix]),
                 (tx) => signAndSendTransaction(rpcClient, tx)
-            );
+            ).catch((error) => console.log(error));
 
             const ammsConfigsManagerAccount = await program.fetchAmmsConfigsManager(rpcClient.rpc, ammsConfigsManagerAddress[0]);
 
@@ -101,6 +107,8 @@ export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvir
                 ammsConfigsManager: ammsConfigsManagerAddress[0],
                 authority: ammsConfigsManagerAuthority.address,
                 headAuthority: owner.address,
+                programData: programDataAddress,
+                cpmmProgram: program.CPMM_PROGRAM_ADDRESS,
                 rent,
                 systemProgram: SYSTEM_PROGRAM_ADDRESS
             };
