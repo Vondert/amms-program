@@ -94,6 +94,7 @@ pub(crate) fn handler(ctx: Context<InitializeCpAmm>) -> Result<()> {
         &accounts.quote_mint,
         &accounts.lp_mint,
         &accounts.amms_config,
+        &accounts.signer.to_account_info(),
         ctx.bumps.cp_amm
     )
 }

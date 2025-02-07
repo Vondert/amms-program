@@ -23,7 +23,10 @@ pub struct CpAmm {
 
     /// Whether the AMM has been launched and is active.
     is_launched: bool, // 1 byte
-
+    
+    /// Canonical bump seed for the account's PDA.
+    bump: [u8; 1], // 1 byte
+    
     /// Initial liquidity that is permanently locked after the pool launch.
     /// This stabilizes the pool in case of empty liquidity.
     initial_locked_liquidity: u64, // 8 bytes
@@ -71,8 +74,8 @@ pub struct CpAmm {
     /// Public key of the associated `AmmsConfig` account.
     amms_config: Pubkey, // 32 bytes
 
-    /// Canonical bump seed for the account's PDA.
-    bump: [u8; 1], // 1 byte
+    /// Public key of the CpAmm creator account.
+    creator: Pubkey // 32 bytes
 }
 
 impl CpAmm {
@@ -130,6 +133,12 @@ impl CpAmm {
     #[inline]
     pub fn amms_config(&self) -> &Pubkey {
         &self.amms_config
+    }
+
+    /// Returns the public key of the CpAmm creator account.
+    #[inline]
+    pub fn creator(&self) -> &Pubkey {
+        &self.creator
     }
 }
 /// Implements the `CpAmmCore` trait for the `CpAmm` struct.
@@ -382,7 +391,7 @@ impl CpAmm {
     /// Initializes the AMM with the provided token mints and configuration.
     ///
     /// This method sets the initial configuration for the AMM, linking it with
-    /// the provided base, quote, and LP token mints, and a configuration account.
+    /// the provided base, quote, and LP token mints, creator and a configuration account.
     /// It also initializes the protocol and provider fee rates and marks the AMM as initialized.
     ///
     /// # Parameters
@@ -390,6 +399,7 @@ impl CpAmm {
     /// - `quote_mint`: The mint of the quote token.
     /// - `lp_mint`: The mint of the LP token.
     /// - `amms_config`: The configuration account for the AMM.
+    /// - `creator`: Account info of creator account.
     /// - `bump`: The canonical bump seed for the AMM's PDA.
     ///
     /// # Returns
@@ -402,6 +412,7 @@ impl CpAmm {
         quote_mint: &InterfaceAccount<token_interface::Mint>,
         lp_mint: &Account<Mint>,
         amms_config: &Account<AmmsConfig>,
+        creator: &AccountInfo,
         bump: u8,
     ) -> Result<()>{
         require!(!self.is_initialized, ErrorCode::CpAmmAlreadyInitialized);
@@ -410,6 +421,7 @@ impl CpAmm {
         self.quote_mint = quote_mint.key();
         self.lp_mint = lp_mint.key();
         self.amms_config = amms_config.key();
+        self.creator = creator.key();
         self.is_launched = false;
         self.is_initialized = true;
         self.bump = [bump];
@@ -554,6 +566,7 @@ mod cp_amm_tests {
         quote_vault: Pubkey,
         locked_lp_vault: Pubkey,
         amms_config: Pubkey,
+        creator: Pubkey,
         bump: [u8; 1],
     }
 
@@ -648,6 +661,10 @@ mod cp_amm_tests {
             self.amms_config = value;
             self
         }
+        fn creator(mut self, value: Pubkey) -> Self{
+            self.creator = value;
+            self
+        }
 
         fn bump(mut self, value: [u8; 1]) -> Self {
             self.bump = value;
@@ -673,6 +690,7 @@ mod cp_amm_tests {
                 quote_vault: self.quote_vault,
                 locked_lp_vault: self.locked_lp_vault,
                 amms_config: self.amms_config,
+                creator: self.creator,
                 bump: self.bump,
             }
         }
@@ -698,14 +716,16 @@ mod cp_amm_tests {
         let quote_vault = Pubkey::new_unique();
         let locked_lp_vault = Pubkey::new_unique();
         let amms_config = Pubkey::new_unique();
+        let creator = Pubkey::new_unique();
         let bump = [42u8];
         
-        let mut data = [0u8; ANCHOR_DISCRIMINATOR + 323];
+        let mut data = [0u8; ANCHOR_DISCRIMINATOR + 355];
         let mut offset = 0;
 
         data[offset..offset + ANCHOR_DISCRIMINATOR].copy_from_slice(&CpAmm::discriminator()); offset += ANCHOR_DISCRIMINATOR;
         data[offset] = is_initialized as u8; offset += 1;
         data[offset] = is_launched as u8; offset += 1;
+        data[offset] = bump[0]; offset += 1;
         data[offset..offset + 8].copy_from_slice(&initial_locked_liquidity.to_le_bytes()); offset += 8;
         data[offset..offset + 16].copy_from_slice(&constant_product_sqrt.get_fractional_bits().to_le_bytes()); offset += 16;
         data[offset..offset + 8].copy_from_slice(&constant_product_sqrt.get_integer_bits().to_le_bytes()); offset += 8;
@@ -723,7 +743,7 @@ mod cp_amm_tests {
         data[offset..offset + 32].copy_from_slice(quote_vault.as_ref()); offset += 32;
         data[offset..offset + 32].copy_from_slice(locked_lp_vault.as_ref()); offset += 32;
         data[offset..offset + 32].copy_from_slice(amms_config.as_ref()); offset += 32;
-        data[offset] = bump[0]; offset += 1;
+        data[offset..offset + 32].copy_from_slice(creator.as_ref()); offset += 32;
         
         assert_eq!(ANCHOR_DISCRIMINATOR + CpAmm::INIT_SPACE, offset);
 
@@ -756,7 +776,7 @@ mod cp_amm_tests {
     /// Tests getter methods of the `CpAmm` struct.
     #[test]
     fn test_cp_amm_getters() {
-        let default_pubkey = Pubkey::new_unique();
+        let unique_pubkey = Pubkey::new_unique();
 
         let amm = CpAmmBuilder::new()
             .is_initialized(true)
@@ -767,26 +787,28 @@ mod cp_amm_tests {
             .base_liquidity(4000)
             .quote_liquidity(5000)
             .lp_tokens_supply(6000)
-            .base_mint(default_pubkey)
-            .quote_mint(default_pubkey)
-            .lp_mint(default_pubkey)
-            .base_vault(default_pubkey)
-            .quote_vault(default_pubkey)
-            .locked_lp_vault(default_pubkey)
-            .amms_config(default_pubkey)
+            .base_mint(unique_pubkey)
+            .quote_mint(unique_pubkey)
+            .lp_mint(unique_pubkey)
+            .base_vault(unique_pubkey)
+            .quote_vault(unique_pubkey)
+            .locked_lp_vault(unique_pubkey)
+            .amms_config(unique_pubkey)
+            .creator(unique_pubkey)
             .bump([253])
             .build();
 
         assert!(amm.is_initialized());
         assert!(!amm.is_launched());
         assert_eq!(amm.bump(), 253);
-        assert_eq!(amm.base_mint(), &default_pubkey);
-        assert_eq!(amm.quote_mint(), &default_pubkey);
-        assert_eq!(amm.lp_mint, default_pubkey);
-        assert_eq!(amm.base_vault(), &default_pubkey);
-        assert_eq!(amm.quote_vault(), &default_pubkey);
-        assert_eq!(amm.amms_config(), &default_pubkey);
-
+        assert_eq!(amm.base_mint(), &unique_pubkey);
+        assert_eq!(amm.quote_mint(), &unique_pubkey);
+        assert_eq!(amm.lp_mint, unique_pubkey);
+        assert_eq!(amm.base_vault(), &unique_pubkey);
+        assert_eq!(amm.quote_vault(), &unique_pubkey);
+        assert_eq!(amm.amms_config(), &unique_pubkey);
+        assert_eq!(amm.creator(), &unique_pubkey);
+        
         assert_eq!(amm.constant_product_sqrt(), Q64_128::from_u64(2000));
         assert_eq!(amm.base_quote_ratio_sqrt(), Q64_128::from_u64(3000));
         assert_eq!(amm.base_liquidity(), 4000);

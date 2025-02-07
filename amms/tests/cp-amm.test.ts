@@ -453,6 +453,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.deepStrictEqual(lpMintAccount.data.mintAuthority, some(cpAmmAccount.address), "LP mint authority is incorrect");
             assert.deepStrictEqual(lpMintAccount.data.freezeAuthority, none(), "LP mint freeze authority should be none");
 
+            assert.strictEqual(cpAmmAccount.data.creator, user.address,  "Creator address mismatch");
             assert.strictEqual(cpAmmAccount.data.ammsConfig, ammsConfigAddress[0],  "AMMs config address mismatch");
             assert.strictEqual(cpAmmAccount.data.baseMint, TEST_MINTS.validTokenMint1.address, "Base mint address mismatch");
             assert.strictEqual(cpAmmAccount.data.quoteMint, TEST_MINTS.validToken22Mint1.address, "Quote mint address mismatch");
@@ -547,6 +548,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.deepStrictEqual(lpMintAccount.data.mintAuthority, some(cpAmmAccount.address), "LP mint authority is incorrect");
             assert.deepStrictEqual(lpMintAccount.data.freezeAuthority, none(), "LP mint freeze authority should be none");
 
+            assert.strictEqual(cpAmmAccount.data.creator, user.address,  "Creator address mismatch");
             assert.strictEqual(cpAmmAccount.data.ammsConfig, ammsConfigAddress[0],  "AMMs config address mismatch");
             assert.strictEqual(cpAmmAccount.data.baseMint, TEST_MINTS.validTokenMint2.address, "Base mint address mismatch");
             assert.strictEqual(cpAmmAccount.data.quoteMint, TEST_MINTS.validTokenMint3.address, "Quote mint address mismatch");
@@ -611,6 +613,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.deepStrictEqual(lpMintAccount.data.mintAuthority, some(cpAmmAccount.address), "LP mint authority is incorrect");
             assert.deepStrictEqual(lpMintAccount.data.freezeAuthority, none(), "LP mint freeze authority should be none");
 
+            assert.strictEqual(cpAmmAccount.data.creator, user.address,  "Creator address mismatch");
             assert.strictEqual(cpAmmAccount.data.ammsConfig, ammsConfigAddress[0],  "AMMs config address mismatch");
             assert.strictEqual(cpAmmAccount.data.baseMint, TEST_MINTS.validTokenMint2.address, "Base mint address mismatch");
             assert.strictEqual(cpAmmAccount.data.quoteMint, TEST_MINTS.transferFeeToken2022Mint.address, "Quote mint address mismatch");
@@ -730,6 +733,52 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             ));
         })
 
+        it("Launching CpAmm with signer that isn't CpAmm creator should fail", async () => {
+            const cpAmmAccountBefore = await fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm1[0]);
+            const [baseMint, quoteMint] = await Promise.all([
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.baseMint),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint)
+            ]);
+
+            const baseLiquidity = BigInt(212342403);
+            const quoteLiquidity = BigInt(453247832);
+
+            const input: LaunchCpAmmInput = {
+                ammsConfig: ammsConfigAddress[0],
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                baseLiquidity,
+                baseMint: cpAmmAccountBefore.data.baseMint,
+                cpAmm: cpAmmAccountBefore.address,
+                cpAmmBaseVault: TEST_CP_AMMS.baseVault1[0],
+                cpAmmLockedLpVault: TEST_CP_AMMS.lpVault1[0],
+                cpAmmQuoteVault: TEST_CP_AMMS.quoteVault1[0],
+                lpMint: cpAmmAccountBefore.data.lpMint,
+                quoteLiquidity,
+                quoteMint: cpAmmAccountBefore.data.quoteMint,
+                signer: generalUser,
+                signerBaseAccount: GENERAL_USER_TOKEN_ACCOUNTS.validToken1.address,
+                signerLpAccount:  GENERAL_USER_TOKEN_ACCOUNTS.lpToken1[0],
+                signerQuoteAccount:  GENERAL_USER_TOKEN_ACCOUNTS.validToken221.address,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                baseTokenProgram: baseMint.programAddress,
+                lpTokenProgram: TOKEN_PROGRAM_ADDRESS,
+                quoteTokenProgram: quoteMint.programAddress,
+            }
+
+            const ix = getLaunchCpAmmInstruction(input);
+
+            await (pipe(
+                await createTransactionWithComputeUnits(rpcClient, owner, [ix], 270_000),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            ).then(
+                async (signature) => {
+                    console.log(await getTransactionLogs(rpcClient, signature));
+                    assert.fail("Expected failure of CpAmm launching with signer that isn't CpAmm creator");
+                },
+                (_error) => {}
+            ));
+        })
+
         it("Launch CpAmm with token mint and token 2022 mint", async () => {
             const [cpAmmAccountBefore, signerBaseBalanceBefore, signerQuoteBalanceBefore] = await Promise.all([
                 fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm1[0]),
@@ -800,6 +849,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
             assert.strictEqual(lpMintAccountAfter.data.supply, totalLiquidity, "LP mint supply is incorrect");
 
+            assert.strictEqual(cpAmmAccountBefore.data.creator, cpAmmAccountAfter.data.creator,  "Creator address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.ammsConfig, cpAmmAccountAfter.data.ammsConfig,  "AMMs config address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.baseMint, cpAmmAccountAfter.data.baseMint, "Base mint address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");
@@ -989,6 +1039,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
             assert.strictEqual(lpMintAccountAfter.data.supply, totalLiquidity, "LP mint supply is incorrect");
 
+            assert.strictEqual(cpAmmAccountBefore.data.creator, cpAmmAccountAfter.data.creator,  "Creator address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.ammsConfig, cpAmmAccountAfter.data.ammsConfig,  "AMMs config address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.baseMint, cpAmmAccountAfter.data.baseMint, "Base mint address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");
@@ -1090,6 +1141,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
             assert.strictEqual(lpMintAccountAfter.data.supply, totalLiquidity, "LP mint supply is incorrect");
 
+            assert.strictEqual(cpAmmAccountBefore.data.creator, cpAmmAccountAfter.data.creator,  "Creator address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.ammsConfig, cpAmmAccountAfter.data.ammsConfig,  "AMMs config address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.baseMint, cpAmmAccountAfter.data.baseMint, "Base mint address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");

@@ -45,6 +45,7 @@ pub struct LaunchCpAmm<'info>{
     #[account(
         mut,
         constraint = !cp_amm.is_launched(),
+        constraint = signer.key() == cp_amm.creator().key(),
         constraint = amms_config.key() == cp_amm.amms_config().key(),
         constraint = lp_mint.key() == cp_amm.lp_mint,
         constraint = base_mint.key() == cp_amm.base_mint().key(),
