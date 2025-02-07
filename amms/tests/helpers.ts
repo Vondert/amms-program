@@ -124,7 +124,6 @@ export const createCpmmTestingEnvironment = async (): Promise<CpmmTestingEnviron
     const user = await createTestUser(rpcClient, 100);
     const rent = address("SysvarRent111111111111111111111111111111111");
     const [programDataAddress] = await getProgramDerivedAddress({programAddress: address('BPFLoaderUpgradeab1e11111111111111111111111'), seeds: [getAddressEncoder().encode(program.CPMM_PROGRAM_ADDRESS)]});
-    //const programDataAddress = program.CPMM_PROGRAM_ADDRESS;
     return {rpcClient, headAuthority, owner, program, rent, programDataAddress, ammsConfigsManagerAuthority, user};
 };
 

@@ -32,6 +32,7 @@ impl U192 {
 	/// An `Option<U192>`:
 	/// - `Some(U192)` if the value fits within 192 bits.
 	/// - `None` if the value exceeds 192 bits.
+	#[cfg(test)]
 	pub fn checked_from_u384(value: U384) -> Option<Self> {
 		if value.leading_zeros() < 192 {
 			return None;
