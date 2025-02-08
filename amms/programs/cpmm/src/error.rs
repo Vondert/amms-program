@@ -106,8 +106,8 @@ pub enum ErrorCode {
     #[msg("Tradable mint for CpAmm has freeze authority.")]
     MintHasFreezeAuthority,
 
-    #[msg("Tradable mint for CpAmm owned by unsupported token program.")]
-    UnsupportedTradableMint,
+    #[msg("Provided mint owned by unsupported token program.")]
+    UnsupportedMint,
 
     #[msg("Tradable mint for CpAmm hase unsupported token extension.")]
     UnsupportedMintTokenExtension,

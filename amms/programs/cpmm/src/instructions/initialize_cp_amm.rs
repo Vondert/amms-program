@@ -1,12 +1,13 @@
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::{token::{Mint, Token, TokenAccount}, token_interface};
+use anchor_spl::{token::{Mint, Token}, token_interface};
+use anchor_spl::token_interface::TokenInterface;
 use crate::constants::CP_AMM_INITIALIZE_PRICE_IN_LAMPORTS;
 use crate::state::{AmmsConfig, cp_amm::{
     CpAmm, 
     CpAmmCalculate
 }};
 use crate::utils::system_instructions::TransferLamportsInstruction;
+use crate::utils::token_accounts_instructions::CreatePdaTokenAccountInstruction;
 use crate::utils::validate_tradable_mint;
 
 #[derive(Accounts)]
@@ -27,7 +28,7 @@ pub struct InitializeCpAmm<'info> {
         payer = signer,
         mint::decimals = CpAmm::LP_MINT_INITIAL_DECIMALS,
         mint::authority = cp_amm,
-        mint::token_program = token_program
+        mint::token_program = lp_token_program
     )]
     pub lp_mint: Box<Account<'info, Mint>>,
     
@@ -48,17 +49,76 @@ pub struct InitializeCpAmm<'info> {
     pub cp_amm: Box<Account<'info, CpAmm>>,
 
     #[account(
-        init,
-        payer = signer,
-        associated_token::mint = lp_mint,
-        associated_token::authority = signer,
+        mut,
+        seeds = [CpAmm::VAULT_SEED, cp_amm.key().as_ref(), base_mint.key().as_ref()],
+        bump
     )]
-    pub signer_lp_token_account: Box<Account<'info, TokenAccount>>,
+    pub cp_amm_base_vault: AccountInfo<'info>,
+
+    #[account(
+        mut,
+        seeds = [CpAmm::VAULT_SEED, cp_amm.key().as_ref(), quote_mint.key().as_ref()],
+        bump
+    )]
+    pub cp_amm_quote_vault: AccountInfo<'info>,
+
+    #[account(
+        mut,
+        seeds = [CpAmm::VAULT_SEED, cp_amm.key().as_ref(), lp_mint.key().as_ref()],
+        bump
+    )]
+    pub cp_amm_locked_lp_vault: AccountInfo<'info>,
     
     pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub lp_token_program: Program<'info, Token>,
+    pub base_token_program: Interface<'info, TokenInterface>,
+    pub quote_token_program: Interface<'info, TokenInterface>,
+}
+
+pub(crate) fn handler(ctx: Context<InitializeCpAmm>) -> Result<()> {
+    ctx.accounts.validate_base_mint()?;
+    ctx.accounts.validate_quote_mint()?;
+    {
+        let cp_amm_key = ctx.accounts.cp_amm.key();
+        {
+            let base_mint_key = ctx.accounts.base_mint.key();
+            let create_cp_amm_base_vault = Box::new(ctx.accounts.get_create_cp_amm_base_vault_instruction()?);
+            let cp_amm_base_vault_seeds = [CpAmm::VAULT_SEED, cp_amm_key.as_ref(), base_mint_key.as_ref(), &[ctx.bumps.cp_amm_base_vault]];
+            create_cp_amm_base_vault.execute(&[&cp_amm_base_vault_seeds])?;
+        }
+        {
+            let quote_mint_key = ctx.accounts.quote_mint.key();
+            let create_cp_amm_quote_vault = Box::new(ctx.accounts.get_create_cp_amm_quote_vault_instruction()?);
+            let cp_amm_quote_vault_seeds = [CpAmm::VAULT_SEED, cp_amm_key.as_ref(),quote_mint_key.as_ref(), &[ctx.bumps.cp_amm_quote_vault]];
+            create_cp_amm_quote_vault.execute(&[&cp_amm_quote_vault_seeds])?;
+        }
+        {
+            let lp_mint_key = ctx.accounts.lp_mint.key();
+            let create_cp_amm_locked_lp_vault = Box::new(ctx.accounts.get_create_cp_amm_locked_lp_vault_instruction()?);
+            let cp_amm_locked_lp_vault_seeds = [CpAmm::VAULT_SEED, cp_amm_key.as_ref(), lp_mint_key.as_ref(), &[ctx.bumps.cp_amm_locked_lp_vault]];
+            create_cp_amm_locked_lp_vault.execute(&[&cp_amm_locked_lp_vault_seeds])?;
+        }
+    }
+    let accounts = ctx.accounts;
+
+    let pay_initial_lamports_instruction = Box::new(accounts.get_pay_initial_lamports_instruction(CP_AMM_INITIALIZE_PRICE_IN_LAMPORTS)?);
+    pay_initial_lamports_instruction.execute()?;
+    
+    accounts.cp_amm.initialize(
+        &accounts.base_mint,
+        &accounts.quote_mint,
+        &accounts.lp_mint,
+        &accounts.amms_config,
+        &accounts.signer.to_account_info(),
+        &accounts.cp_amm_base_vault,
+        &accounts.cp_amm_quote_vault,
+        &accounts.cp_amm_locked_lp_vault,
+        ctx.bumps.cp_amm,
+        ctx.bumps.cp_amm_base_vault,
+        ctx.bumps.cp_amm_quote_vault,
+        ctx.bumps.cp_amm_locked_lp_vault
+    )
 }
 
 impl<'info> InitializeCpAmm<'info>{
@@ -78,23 +138,37 @@ impl<'info> InitializeCpAmm<'info>{
             &self.system_program
         )
     }
-}
-
-pub(crate) fn handler(ctx: Context<InitializeCpAmm>) -> Result<()> {
-    let accounts = ctx.accounts;
-    
-    accounts.validate_base_mint()?;
-    accounts.validate_quote_mint()?;
-
-    let pay_initial_lamports_instruction = Box::new(accounts.get_pay_initial_lamports_instruction(CP_AMM_INITIALIZE_PRICE_IN_LAMPORTS)?);
-    pay_initial_lamports_instruction.execute()?;
-    
-    accounts.cp_amm.initialize(
-        &accounts.base_mint,
-        &accounts.quote_mint,
-        &accounts.lp_mint,
-        &accounts.amms_config,
-        &accounts.signer.to_account_info(),
-        ctx.bumps.cp_amm
-    )
+    #[inline(never)]
+    fn get_create_cp_amm_base_vault_instruction(&self) -> Result<CreatePdaTokenAccountInstruction<'_, '_, '_, 'info>>{
+        CreatePdaTokenAccountInstruction::try_new(
+            self.signer.to_account_info(),
+            self.cp_amm_base_vault.to_account_info(),
+            self.cp_amm.to_account_info(),
+            self.base_mint.to_account_info(),
+            self.base_token_program.to_account_info(),
+            self.system_program.to_account_info()
+        )
+    }
+    #[inline(never)]
+    fn get_create_cp_amm_quote_vault_instruction(&self) -> Result<CreatePdaTokenAccountInstruction<'_, '_, '_, 'info>>{
+        CreatePdaTokenAccountInstruction::try_new(
+            self.signer.to_account_info(),
+            self.cp_amm_quote_vault.to_account_info(),
+            self.cp_amm.to_account_info(),
+            self.quote_mint.to_account_info(),
+            self.quote_token_program.to_account_info(),
+            self.system_program.to_account_info()
+        )
+    }
+    #[inline(never)]
+    fn get_create_cp_amm_locked_lp_vault_instruction(&self) -> Result<CreatePdaTokenAccountInstruction<'_, '_, '_, 'info>>{
+        CreatePdaTokenAccountInstruction::try_new(
+            self.signer.to_account_info(),
+            self.cp_amm_locked_lp_vault.to_account_info(),
+            self.cp_amm.to_account_info(),
+            self.lp_mint.to_account_info(),
+            self.lp_token_program.to_account_info(),
+            self.system_program.to_account_info()
+        )
+    }
 }

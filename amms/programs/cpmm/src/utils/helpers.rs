@@ -12,8 +12,6 @@ use anchor_spl::token_2022::spl_token_2022::extension::{BaseStateWithExtensions,
 const ALLOWED_TOKEN_EXTENSIONS: &[ExtensionType] = &[
     ExtensionType::TransferFeeConfig,
     ExtensionType::ImmutableOwner,
-   // ExtensionType::ConfidentialTransferMint,
-    ExtensionType::InterestBearingConfig,
     ExtensionType::TransferHook,
     ExtensionType::MetadataPointer,
     ExtensionType::TokenMetadata,
@@ -22,12 +20,6 @@ const ALLOWED_TOKEN_EXTENSIONS: &[ExtensionType] = &[
     ExtensionType::GroupMemberPointer,
     ExtensionType::TokenGroupMember
 ];
-
-/// A list of forbidden token extensions for CpAmm vaults.
-/*const FORBIDDEN_VAULT_ACCOUNTS_EXTENSIONS: &[ExtensionType] = &[
-    ExtensionType::MemoTransfer,
-    ExtensionType::CpiGuard
-];*/
 
 /// Validates a given token mint to ensure it adheres to specific criteria.
 ///
@@ -61,25 +53,6 @@ pub(crate) fn validate_tradable_mint(tradable_mint: &InterfaceAccount<Mint>) -> 
             Ok(())
         },
         TOKEN_PROGRAM_ID => Ok(()),
-        _ => Err(ErrorCode::UnsupportedTradableMint.into()),
+        _ => Err(ErrorCode::UnsupportedMint.into()),
     }
 }
-
-/*pub(crate) fn validate_cp_amm_vault(vault_account: &InterfaceAccount<TokenAccount>) -> Result<()>{
-    require!(vault_account.is_initialized(), );
-    
-    let vault_account_info = vault_account.to_account_info();
-    
-    match vault_account_info.owner.key() {
-        TOKEN_2022_PROGRAM_ID => {
-            require!(
-                StateWithExtensions::<spl_token_2022::state::Account>::unpack(&vault_account_info.data.borrow())?
-                    .get_extension_types()?.iter().all(|x| !FORBIDDEN_VAULT_ACCOUNTS_EXTENSIONS.contains(x)), 
-                ErrorCode::UnsupportedTokenExtension
-            );
-            Ok(())
-        },
-        TOKEN_PROGRAM_ID => Ok(()),
-        _ => Err(ErrorCode::UnsupportedTradableMint.into()),
-    }
-}*/

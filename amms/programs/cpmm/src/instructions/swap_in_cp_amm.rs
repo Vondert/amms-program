@@ -48,10 +48,18 @@ pub struct SwapInCpAmm<'info>{
     )]
     pub cp_amm: Box<Account<'info, CpAmm>>,
 
-    #[account(mut)]
-    pub cp_amm_base_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [CpAmm::VAULT_SEED, cp_amm.key().as_ref(), cp_amm.base_mint().as_ref()],
+        bump = cp_amm.base_vault_bump()
+    )]
+    pub cp_amm_base_vault:Box<InterfaceAccount<'info, TokenAccount>>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [CpAmm::VAULT_SEED, cp_amm.key().as_ref(), cp_amm.quote_mint().as_ref()],
+        bump = cp_amm.quote_vault_bump()
+    )]
     pub cp_amm_quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub associated_token_program: Program<'info, AssociatedToken>,

@@ -11,6 +11,7 @@ use crate::error::ErrorCode;
 ///
 /// This struct handles both standard SPL tokens and SPL Token 2022 with transfer fees.
 ///
+/// # Fields
 /// - `amount`: The amount of tokens to transfer.
 /// - `decimals`: Number of decimal places in the token's representation.
 /// - `context`: Encapsulates the transfer context, which can be either a regular transfer or one with fees.

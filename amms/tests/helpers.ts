@@ -138,6 +138,10 @@ export const getAmmsConfigPDA = async (id: bigint): Promise<ProgramDerivedAddres
 export const getCpAmmPDA = async (lpMint: Address): Promise<ProgramDerivedAddress> =>{
    return await getProgramDerivedAddress({programAddress: program.CPMM_PROGRAM_ADDRESS, seeds: ["cp_amm", getAddressEncoder().encode(lpMint)]});
 }
+export const getCpAmmVaultPDA = async (cpAmm: Address, mint: Address): Promise<ProgramDerivedAddress> =>{
+    return await getProgramDerivedAddress({programAddress: program.CPMM_PROGRAM_ADDRESS, seeds: ["vault", getAddressEncoder().encode(cpAmm), getAddressEncoder().encode(mint)]});
+}
+
 
 export const getTokenPDA = async (mint: Address, owner: Address): Promise<ProgramDerivedAddress> => {
     return await findAssociatedTokenPda({
