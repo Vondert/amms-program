@@ -1,5 +1,5 @@
 import {
-    Account, generateKeyPairSigner, KeyPairSigner, none,
+    Account, generateKeyPairSigner, getAddressEncoder, getProgramDerivedAddress, KeyPairSigner, none,
     pipe, ProgramDerivedAddress, Some, some
 } from "@solana/web3.js";
 import {SYSTEM_PROGRAM_ADDRESS} from "@solana-program/system";
@@ -13,10 +13,11 @@ import {
 import {assert} from "chai";
 import {before, describe} from "mocha";
 import {
+    fetchAmmsConfig,
     fetchCpAmm,
-    getInitializeCpAmmInstruction, getLaunchCpAmmInstruction, getProvideToCpAmmInstruction,
+    getInitializeCpAmmInstruction, getLaunchCpAmmInstruction, getProvideToCpAmmInstruction, getSwapInCpAmmInstruction,
     InitializeCpAmmInput,
-    LaunchCpAmmInput, ProvideToCpAmmInput
+    LaunchCpAmmInput, ProvideToCpAmmInput, SwapInCpAmmInput
 } from "../clients/js/src/generated";
 import {
     CpmmTestingEnvironment, createTestUser, createTransaction,
@@ -30,6 +31,7 @@ import {
     createToken22MintWithTransferFee,
     createTokenMint
 } from "./tokens-helpers";
+import * as program from "../clients/js/src/generated";
 
 
 export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsConfigAddress: ProgramDerivedAddress) =>{
@@ -356,6 +358,44 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
                 async (signature) => {
                     console.log(await getTransactionLogs(rpcClient, signature));
                     assert.fail("Expected failure of CpAmm initialization with invalid LP mint");
+                },
+                (_error) => {}
+            ));
+        })
+
+        it("Initialization CpAmm with invalid token account as vault should fail", async () => {
+            const invalidPdaTokenAccount = await getProgramDerivedAddress({
+                programAddress: program.CPMM_PROGRAM_ADDRESS,
+                seeds: ["vaultt", getAddressEncoder().encode(TEST_CP_AMMS.cpAmm1[0]), getAddressEncoder().encode(TEST_MINTS.validTokenMint1.address)]
+            });
+
+            const input: InitializeCpAmmInput = {
+                ammsConfig: ammsConfigAddress[0],
+                baseMint: TEST_MINTS.validTokenMint1.address,
+                cpAmm: TEST_CP_AMMS.cpAmm1[0],
+                feeAuthority: headAuthority.address,
+                lpMint: TEST_CP_AMMS.lpMint1[0],
+                quoteMint: TEST_MINTS.validTokenMint2.address,
+                cpAmmBaseVault: invalidPdaTokenAccount[0],
+                cpAmmLockedLpVault: TEST_CP_AMMS.lpVault1[0],
+                cpAmmQuoteVault: TEST_CP_AMMS.quoteVault1[0],
+                rent,
+                signer: user,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                lpTokenProgram: TOKEN_PROGRAM_ADDRESS,
+                baseTokenProgram: TOKEN_PROGRAM_ADDRESS,
+                quoteTokenProgram: TOKEN_PROGRAM_ADDRESS
+            }
+
+            const ix = getInitializeCpAmmInstruction(input);
+
+            await (pipe(
+                await createTransaction(rpcClient, owner, [ix]),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            ).then(
+                async (signature) => {
+                    console.log(await getTransactionLogs(rpcClient, signature));
+                    assert.fail("Expected failure of CpAmm initialization with invalid token account as vault");
                 },
                 (_error) => {}
             ));
@@ -923,10 +963,10 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
             assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
 
-            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, initialLockedLiquidity, `Initial locked liquidity should be ${initialLockedLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, totalLiquidity, `LP token supply should be ${totalLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity, baseLiquidity, `Base liquidity should be ${baseLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity, quoteLiquidity, `Quote liquidity should be ${quoteLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, initialLockedLiquidity, `Initial locked liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, totalLiquidity, `LP token supply does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity, baseLiquidity, `Base liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity, quoteLiquidity, `Quote liquidity does not match expected value`);
 
             assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, {value: [[ 11569318178613274784n, 12626128898751551786n, 0n ]]}, "Base quote ratio sqrt mismatch");
             assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, {value: [[ 11035359224094822028n, 1696597754053898133n, 310231742n ]]}, "Constant product sqrt mismatch");
@@ -1117,10 +1157,10 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
             assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
 
-            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, initialLockedLiquidity, `Initial locked liquidity should be ${initialLockedLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, totalLiquidity, `LP token supply should be ${totalLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity, baseLiquidity, `Base liquidity should be ${baseLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity, quoteLiquidity, `Quote liquidity should be ${quoteLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, initialLockedLiquidity, `Initial locked liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, totalLiquidity, `LP token supply does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity, baseLiquidity, `Base liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity, quoteLiquidity, `Quote liquidity does not match expected value`);
 
             assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, {value: [[ 7378697629483820645n, 7378697629483820646n, 0n ] ]}, "Base quote ratio sqrt mismatch");
             assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, {value: [[ 0n, 0n, 400000n ]]}, "Constant product sqrt mismatch");
@@ -1223,16 +1263,15 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
             assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
 
-            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, initialLockedLiquidity, `Initial locked liquidity should be ${initialLockedLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, totalLiquidity, `LP token supply should be ${totalLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity, baseLiquidity, `Base liquidity should be ${baseLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity, quoteLiquidity - quoteFee, `Quote liquidity should be ${quoteLiquidity - quoteFee}`);
+            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, initialLockedLiquidity, `Initial locked liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, totalLiquidity, `LP token supply does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity, baseLiquidity, `Base liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity, quoteLiquidity - quoteFee, `Quote liquidity does not match expected value`);
 
             assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, {value: [[ 3475547461318636948n, 6600456554340055308n, 2n ]]}, "Base quote ratio sqrt mismatch");
             assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, {value: [[ 16463856578203948456n, 17179385210221578158n, 2318034170991n ]]}, "Constant product sqrt mismatch");
 
         })
-
 
         // Provide CpAmm
 
@@ -1356,21 +1395,25 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.lpMint, cpAmmAccountAfter.data.lpMint, "LP mint address should remain unchanged");
 
-            assert.strictEqual(cpAmmAccountBefore.data.baseVault, cpAmmAccountAfter.data.baseVault, "Base vault address mismatch");
-            assert.strictEqual(cpAmmAccountBefore.data.quoteVault, cpAmmAccountAfter.data.quoteVault, "Quote vault address mismatch");
-            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVault, cpAmmAccountAfter.data.lockedLpVault, "LP vault address mismatch");
+            assert.strictEqual(cpAmmAccountBefore.data.baseVault, cpAmmAccountAfter.data.baseVault, "Base vault address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteVault, cpAmmAccountAfter.data.quoteVault, "Quote vault address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVault, cpAmmAccountAfter.data.lockedLpVault, "LP vault address should remain unchanged");
 
             assert.strictEqual(cpAmmAccountBefore.data.protocolBaseFeesToRedeem, cpAmmAccountAfter.data.protocolBaseFeesToRedeem, "Protocol base fees should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.protocolQuoteFeesToRedeem, cpAmmAccountAfter.data.protocolQuoteFeesToRedeem, "Protocol quote fees should remain unchanged");
+
             assert.strictEqual(cpAmmAccountBefore.data.bump[0], cpAmmAccountAfter.data.bump[0], "Bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseVaultBump[0], cpAmmAccountAfter.data.baseVaultBump[0], "Base vault bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteVaultBump[0], cpAmmAccountAfter.data.quoteVaultBump[0], "Quote vault bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVaultBump[0], cpAmmAccountAfter.data.lockedLpVaultBump[0], "Locked LP vault bump value should remain unchanged");
 
             assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
             assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
 
             assert.strictEqual(cpAmmAccountBefore.data.initialLockedLiquidity, cpAmmAccountAfter.data.initialLockedLiquidity, `Initial locked liquidity should remain unchanged`);
-            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply - cpAmmAccountBefore.data.lpTokensSupply, providedLiquidity, `LP token supply should be ${providedLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity - cpAmmAccountBefore.data.baseLiquidity, baseLiquidity, `Base liquidity should be ${baseLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity - cpAmmAccountBefore.data.quoteLiquidity, quoteLiquidity, `Quote liquidity should be ${quoteLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply - cpAmmAccountBefore.data.lpTokensSupply, providedLiquidity, `LP token supply does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity - cpAmmAccountBefore.data.baseLiquidity, baseLiquidity, `Base liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity - cpAmmAccountBefore.data.quoteLiquidity, quoteLiquidity, `Quote liquidity does not match expected value`);
 
             assert.deepStrictEqual(cpAmmAccountBefore.data.baseQuoteRatioSqrt, cpAmmAccountAfter.data.baseQuoteRatioSqrt, "Base quote ratio should remain unchanged");
             assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, { value: [ [ 0n, 0n, 1600000n ] ] }, "Constant product sqrt mismatch");
@@ -1459,21 +1502,25 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.lpMint, cpAmmAccountAfter.data.lpMint, "LP mint address should remain unchanged");
 
-            assert.strictEqual(cpAmmAccountBefore.data.baseVault, cpAmmAccountAfter.data.baseVault, "Base vault address mismatch");
-            assert.strictEqual(cpAmmAccountBefore.data.quoteVault, cpAmmAccountAfter.data.quoteVault, "Quote vault address mismatch");
-            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVault, cpAmmAccountAfter.data.lockedLpVault, "LP vault address mismatch");
+            assert.strictEqual(cpAmmAccountBefore.data.baseVault, cpAmmAccountAfter.data.baseVault, "Base vault address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteVault, cpAmmAccountAfter.data.quoteVault, "Quote vault address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVault, cpAmmAccountAfter.data.lockedLpVault, "LP vault address should remain unchanged");
 
             assert.strictEqual(cpAmmAccountBefore.data.protocolBaseFeesToRedeem, cpAmmAccountAfter.data.protocolBaseFeesToRedeem, "Protocol base fees should remain unchanged");
             assert.strictEqual(cpAmmAccountBefore.data.protocolQuoteFeesToRedeem, cpAmmAccountAfter.data.protocolQuoteFeesToRedeem, "Protocol quote fees should remain unchanged");
+
             assert.strictEqual(cpAmmAccountBefore.data.bump[0], cpAmmAccountAfter.data.bump[0], "Bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseVaultBump[0], cpAmmAccountAfter.data.baseVaultBump[0], "Base vault bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteVaultBump[0], cpAmmAccountAfter.data.quoteVaultBump[0], "Quote vault bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVaultBump[0], cpAmmAccountAfter.data.lockedLpVaultBump[0], "Locked LP vault bump value should remain unchanged");
 
             assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
             assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
 
             assert.strictEqual(cpAmmAccountBefore.data.initialLockedLiquidity, cpAmmAccountAfter.data.initialLockedLiquidity, `Initial locked liquidity should remain unchanged`);
-            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply - cpAmmAccountBefore.data.lpTokensSupply, providedLiquidity, `LP token supply should be ${providedLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity - cpAmmAccountBefore.data.baseLiquidity, baseLiquidity, `Base liquidity should be ${baseLiquidity}`);
-            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity - cpAmmAccountBefore.data.quoteLiquidity, quoteAfterFeeLiquidity, `Quote liquidity should be ${quoteAfterFeeLiquidity}`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply - cpAmmAccountBefore.data.lpTokensSupply, providedLiquidity, `LP token supply does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity - cpAmmAccountBefore.data.baseLiquidity, baseLiquidity, `Base liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity - cpAmmAccountBefore.data.quoteLiquidity, quoteAfterFeeLiquidity, `Quote liquidity does not match expected value`);
 
             assert.deepStrictEqual(cpAmmAccountBefore.data.baseQuoteRatioSqrt, cpAmmAccountAfter.data.baseQuoteRatioSqrt, "Base quote ratio should remain unchanged");
             assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, { value: [ [ 6549419100675932660n, 10842590892781710873n, 13908205025951n ]  ] }, "Constant product sqrt mismatch");
@@ -1482,7 +1529,102 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
         // Swap CpAmm
 
+        it("Swap base to quote in CpAmm with two token mints", async () => {
+            const [cpAmmAccountBefore, signerBaseBalanceBefore, signerQuoteBalanceBefore] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm2[0]),
+                rpcClient.rpc.getTokenAccountBalance(GENERAL_USER_TOKEN_ACCOUNTS.validToken2.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(GENERAL_USER_TOKEN_ACCOUNTS.validToken3.address).send()
+            ]);
+            const [ammsConfig, baseMint, quoteMint, cpAmmBaseBalanceBefore, cpAmmQuoteBalanceBefore] = await Promise.all([
+                fetchAmmsConfig(rpcClient.rpc, cpAmmAccountBefore.data.ammsConfig),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.baseMint),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.baseVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.quoteVault).send()
+            ]);
 
+            const swapBaseAmount = BigInt(1_242_344);
+            const protocolFee = swapBaseAmount * BigInt(ammsConfig.data.protocolFeeRateBasisPoints) / BigInt(10_000);
+            const providersFee = swapBaseAmount * BigInt(ammsConfig.data.providersFeeRateBasisPoints) / BigInt(10_000);
+
+            //1_180_228
+            const swapBaseAmountAfterFees = swapBaseAmount - providersFee - protocolFee;
+
+            const isInOut = true;
+            const allowedSlippage = BigInt(0);
+            const estimatedResult = BigInt(2593583);
+
+            const input: SwapInCpAmmInput = {
+                baseMint: cpAmmAccountBefore.data.baseMint,
+                quoteMint: cpAmmAccountBefore.data.quoteMint,
+                ammsConfig: cpAmmAccountBefore.data.ammsConfig,
+                cpAmm: cpAmmAccountBefore.address,
+                cpAmmBaseVault: cpAmmAccountBefore.data.baseVault,
+                cpAmmQuoteVault: cpAmmAccountBefore.data.quoteVault,
+                signer: generalUser,
+                signerBaseAccount: GENERAL_USER_TOKEN_ACCOUNTS.validToken2.address,
+                signerQuoteAccount: GENERAL_USER_TOKEN_ACCOUNTS.validToken3.address,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                baseTokenProgram: baseMint.programAddress,
+                quoteTokenProgram: quoteMint.programAddress,
+                swapAmount: swapBaseAmount,
+                isInOut,
+                estimatedResult,
+                allowedSlippage
+            };
+
+            const ix = getSwapInCpAmmInstruction(input);
+
+            await pipe(
+                await createTransaction(rpcClient, owner, [ix]),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            ).catch((error) => console.log(error));
+
+            const [cpAmmAccountAfter, signerBaseBalanceAfter, signerQuoteBalanceAfter, cpAmmBaseBalanceAfter, cpAmmQuoteBalanceAfter] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, cpAmmAccountBefore.address),
+                rpcClient.rpc.getTokenAccountBalance(GENERAL_USER_TOKEN_ACCOUNTS.validToken2.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(GENERAL_USER_TOKEN_ACCOUNTS.validToken3.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.baseVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.quoteVault).send()
+            ]);
+
+            assert.strictEqual(BigInt(signerBaseBalanceBefore.value.amount) - BigInt(signerBaseBalanceAfter.value.amount), swapBaseAmount, "Signer base balance does not match expected value");
+            assert.strictEqual(BigInt(signerQuoteBalanceAfter.value.amount) - BigInt(signerQuoteBalanceBefore.value.amount), estimatedResult, "Signer quote balance does not match expected value");
+
+            assert.strictEqual(BigInt(cpAmmBaseBalanceAfter.value.amount) - BigInt(cpAmmBaseBalanceBefore.value.amount), swapBaseAmount, "CpAmm base balance does not match expected value");
+            assert.strictEqual(BigInt(cpAmmQuoteBalanceBefore.value.amount) - BigInt(cpAmmQuoteBalanceAfter.value.amount), estimatedResult, "CpAmm quote balance does not match expected value");
+
+            assert.strictEqual(cpAmmAccountBefore.data.ammsConfig, cpAmmAccountAfter.data.ammsConfig,  "AMMs config address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseMint, cpAmmAccountAfter.data.baseMint, "Base mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lpMint, cpAmmAccountAfter.data.lpMint, "LP mint address should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountBefore.data.baseVault, cpAmmAccountAfter.data.baseVault, "Base vault address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteVault, cpAmmAccountAfter.data.quoteVault, "Quote vault address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVault, cpAmmAccountAfter.data.lockedLpVault, "LP vault address should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountAfter.data.protocolBaseFeesToRedeem - cpAmmAccountBefore.data.protocolBaseFeesToRedeem, protocolFee, "Protocol base fees do not match expected value");
+            assert.strictEqual(cpAmmAccountBefore.data.protocolQuoteFeesToRedeem, cpAmmAccountAfter.data.protocolQuoteFeesToRedeem, "Protocol quote fees should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountBefore.data.bump[0], cpAmmAccountAfter.data.bump[0], "Bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseVaultBump[0], cpAmmAccountAfter.data.baseVaultBump[0], "Base vault bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteVaultBump[0], cpAmmAccountAfter.data.quoteVaultBump[0], "Quote vault bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVaultBump[0], cpAmmAccountAfter.data.lockedLpVaultBump[0], "Locked LP vault bump value should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
+            assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
+
+            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, cpAmmAccountBefore.data.initialLockedLiquidity, `Initial locked liquidity should remain unchanged`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, cpAmmAccountBefore.data.lpTokensSupply, `LP token supply should remain unchanged`);
+            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity - cpAmmAccountBefore.data.baseLiquidity, swapBaseAmountAfterFees + providersFee, `Base liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.baseLiquidity - cpAmmAccountBefore.data.baseLiquidity - swapBaseAmountAfterFees, providersFee, "Collected base providers fees doesn't match");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteLiquidity - cpAmmAccountAfter.data.quoteLiquidity, estimatedResult, `Quote liquidity does not match expected value`);
+
+            assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, { value: [ [ 16462419620470434942n, 2823589378402813650n, 1n ] ] }, "Base quote ratio does not match expected value");
+            assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, { value: [ [ 1819616245600884935n, 2825593252532761162n, 1621693n ] ] }, "Constant product does not match expected value");
+
+        })
 
         // Withdraw CpAmm
 

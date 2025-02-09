@@ -24,18 +24,18 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     /// - Example: If `LP_MINT_INITIAL_DECIMALS = 5`, then `INITIAL_LOCKED_LP_TOKENS = 100000`.
     const INITIAL_LOCKED_LP_TOKENS: u64 = 10_u64.pow(Self::LP_MINT_INITIAL_DECIMALS as u32);
 
-    /// The tolerance for changes in the constant product during swaps.
+    /// The tolerance for changes in the constant product square root during swaps.
     ///
     /// - This value is used to ensure the AMM adheres to the constant product rule with minimal deviation.
-    /// - Defined as a `Q64_128` value representing a tolerance of `0.00001%`.
-    const SWAP_CONSTANT_PRODUCT_TOLERANCE: Q64_128 = Q64_128::from_bits(0, 3402823669209384634633746074317);
+    /// - Defined as a `Q64_128` value representing a tolerance of `0.0001%`.
+    const SWAP_CONSTANT_PRODUCT_SQRT_TOLERANCE: Q64_128 = Q64_128::from_bits(0, 34028236692093846346337460743176);
 
-    /// The tolerance for adjusting liquidity ratios.
+    /// The tolerance for liquidity ratio sqrt after adjusting.
     ///
-    /// - Similar to `SWAP_CONSTANT_PRODUCT_TOLERANCE`, this constant defines the allowable deviation
+    /// - Similar to `SWAP_CONSTANT_PRODUCT_SQRT_TOLERANCE`, this constant defines the allowable deviation
     ///   when recalculating the liquidity ratio of the pool.
     /// - Defined as a `Q64_128` value representing a tolerance of `0.00001%`.
-    const ADJUST_LIQUIDITY_RATIO_TOLERANCE: Q64_128 = Q64_128::from_bits(0, 3402823669209384634633746074317);
+    const ADJUST_LIQUIDITY_RATIO_SQRT_TOLERANCE: Q64_128 = Q64_128::from_bits(0, 3402823669209384634633746074317);
 
     /// Calculates the initial LP token supply and locked liquidity during pool launch.
     ///
@@ -130,7 +130,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     fn validate_and_calculate_liquidity_ratio(&self, new_base_liquidity: u64, new_quote_liquidity: u64) -> Result<Q64_128>{
         let new_base_quote_ratio_sqrt = Self::calculate_base_quote_ratio_sqrt(new_base_liquidity, new_quote_liquidity).ok_or(ErrorCode::BaseQuoteRatioCalculationFailed)?;
         let difference = self.base_quote_ratio_sqrt().abs_diff(new_base_quote_ratio_sqrt);
-        let allowed_difference = self.base_quote_ratio_sqrt() * Self::ADJUST_LIQUIDITY_RATIO_TOLERANCE;
+        let allowed_difference = self.base_quote_ratio_sqrt() * Self::ADJUST_LIQUIDITY_RATIO_SQRT_TOLERANCE;
         require!(difference <= allowed_difference, ErrorCode::LiquidityRatioToleranceExceeded);
         Ok(new_base_quote_ratio_sqrt)
     }
@@ -147,7 +147,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     fn validate_swap_constant_product(&self, new_base_liquidity: u64, new_quote_liquidity: u64) -> Result<()>{
         let new_constant_product_sqrt = Self::calculate_constant_product_sqrt(new_base_liquidity, new_quote_liquidity).ok_or(ErrorCode::ConstantProductCalculationFailed)?;
         let difference = self.constant_product_sqrt().abs_diff(new_constant_product_sqrt);
-        let allowed_difference = self.constant_product_sqrt() * Self::SWAP_CONSTANT_PRODUCT_TOLERANCE;
+        let allowed_difference = self.constant_product_sqrt() * Self::SWAP_CONSTANT_PRODUCT_SQRT_TOLERANCE;
         require!(difference <= allowed_difference, ErrorCode::ConstantProductToleranceExceeded);
         Ok(())
     }
