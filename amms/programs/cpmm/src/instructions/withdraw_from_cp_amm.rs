@@ -105,9 +105,9 @@ impl<'info> WithdrawFromCpAmm<'info>{
         TransferTokensInstruction::try_new(
             base_liquidity,
             &self.base_mint,
-            self.cp_amm_base_vault.to_account_info(),
+            &self.cp_amm_base_vault,
             self.cp_amm.to_account_info(),
-            self.signer_base_account.to_account_info(),
+            &self.signer_base_account,
             &self.base_token_program
         )
     }
@@ -115,9 +115,9 @@ impl<'info> WithdrawFromCpAmm<'info>{
         TransferTokensInstruction::try_new(
             quote_liquidity,
             &self.quote_mint,
-            self.signer_quote_account.to_account_info(),
+            &self.signer_quote_account,
             self.cp_amm.to_account_info(),
-            self.cp_amm_quote_vault.to_account_info(),
+            &self.cp_amm_quote_vault,
             &self.quote_token_program
         )
     }

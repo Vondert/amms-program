@@ -116,9 +116,9 @@ impl<'info> LaunchCpAmm<'info>{
         TransferTokensInstruction::try_new(
             base_liquidity,
             &self.base_mint,
-            self.creator_base_account.to_account_info(),
+            &self.creator_base_account,
             self.creator.to_account_info(),
-            self.cp_amm_base_vault.to_account_info(),
+            &self.cp_amm_base_vault,
             &self.base_token_program
         )
     }
@@ -128,9 +128,9 @@ impl<'info> LaunchCpAmm<'info>{
         TransferTokensInstruction::try_new(
             quote_liquidity,
             &self.quote_mint,
-            self.creator_quote_account.to_account_info(),
+            &self.creator_quote_account,
             self.creator.to_account_info(),
-            self.cp_amm_quote_vault.to_account_info(),
+            &self.cp_amm_quote_vault,
             &self.quote_token_program
         )
     }

@@ -96,9 +96,9 @@ impl<'info> CollectFeesFromCpAmm<'info> {
         TransferTokensInstruction::try_new(
             base_fees,
             &self.base_mint,
-            self.cp_amm_base_vault.to_account_info(),
+            &self.cp_amm_base_vault,
             self.cp_amm.to_account_info(),
-            self.fee_authority_base_account.to_account_info(),
+            &self.fee_authority_base_account,
             &self.base_token_program
         )
     }
@@ -106,9 +106,9 @@ impl<'info> CollectFeesFromCpAmm<'info> {
         TransferTokensInstruction::try_new(
             quote_fees,
             &self.quote_mint,
-            self.fee_authority_quote_account.to_account_info(),
+            &self.fee_authority_quote_account,
             self.cp_amm.to_account_info(),
-            self.cp_amm_quote_vault.to_account_info(),
+            &self.cp_amm_quote_vault,
             &self.quote_token_program
         )
     }

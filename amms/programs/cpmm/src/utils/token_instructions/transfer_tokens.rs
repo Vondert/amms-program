@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::{
     token::{ID as TOKEN_PROGRAM_ID}
 };
-use anchor_spl::token_interface::{get_mint_extension_data, transfer_checked, transfer_checked_with_fee, Mint, TokenInterface};
+use anchor_spl::token_interface::{get_mint_extension_data, transfer_checked, transfer_checked_with_fee, Mint, TokenInterface, TokenAccount};
 use anchor_spl::token_interface::spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use crate::utils::token_instructions::{TransferContextRegular, TransferContextWithFee};
 use crate::error::ErrorCode;
@@ -37,29 +37,34 @@ impl<'at, 'bt, 'ct, 'info>  TransferTokensInstruction<'at, 'bt, 'ct, 'info>  {
     pub fn try_new(
         amount: u64, 
         mint: &'_ InterfaceAccount<'info, Mint>, 
-        from: AccountInfo<'info>, 
+        from: &'_ InterfaceAccount<'info, TokenAccount>, 
         from_authority: AccountInfo<'info>,
-        to: AccountInfo<'info>, 
+        to: &'_ InterfaceAccount<'info, TokenAccount>, 
         token_program: &'_ Interface<'info, TokenInterface>
     ) -> Result<Self> {
+        require!(from.amount >= amount, ErrorCode::InsufficientBalanceForTransfer);
+        require!(mint.to_account_info().owner.key() == token_program.key(), ErrorCode::MintAndTokenProgramMismatch);
+        
+        let from_account_info = from.to_account_info();
+        let to_account_info = to.to_account_info();
         
         let context = if mint.to_account_info().owner.key() == TOKEN_PROGRAM_ID {
             TransferContextType::Regular(
                 TransferContextRegular::new_for_spl_token(
-                    mint, from, from_authority, to, token_program
+                    mint, from_account_info, from_authority, to_account_info, token_program
                 )
             )
         }else if let Ok(transfer_fee_config) = get_mint_extension_data::<TransferFeeConfig>(&mint.to_account_info()){
             let fee = transfer_fee_config.calculate_epoch_fee(Clock::get()?.epoch, amount).ok_or(ErrorCode::MintTransferFeeCalculationFailed)?;
             TransferContextType::WithFee(
                 TransferContextWithFee::new_for_token_2022(
-                    fee, mint, from, from_authority, to, token_program
+                    fee, mint, from_account_info, from_authority, to_account_info, token_program
                 )
             )
         }else{
             TransferContextType::Regular(
                 TransferContextRegular::new_for_token_2022(
-                    mint, from, from_authority, to, token_program
+                    mint, from_account_info, from_authority, to_account_info, token_program
                 )
             )
         };

@@ -73,7 +73,10 @@ pub enum ErrorCode {
 
     #[msg("Swap result is zero.")]
     SwapResultIsZero,
-
+    
+    #[msg("Swap fees are zero")]
+    SwapFeesAreZero,
+    
     #[msg("Calculated slippage exceeds allowed tolerance.")]
     SwapSlippageExceeded,
     

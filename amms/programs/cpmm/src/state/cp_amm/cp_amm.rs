@@ -374,17 +374,20 @@ impl CpAmm {
         require!(providers_fee_rate_basis_points + protocol_fee_rate_basis_points <= 10000, ErrorCode::ConfigFeeRateExceeded);
 
         let (new_base_liquidity, new_quote_liquidity, amount_to_withdraw, protocol_fees_to_redeem);
-        let providers_fees_to_redeem = Self::calculate_fee_amount(swap_amount, providers_fee_rate_basis_points);
+        let providers_fee_amount = Self::calculate_fee_amount(swap_amount, providers_fee_rate_basis_points);
         let protocol_fee_amount = Self::calculate_fee_amount(swap_amount, protocol_fee_rate_basis_points);
+        
+        require!(providers_fee_amount > 0 && protocol_fee_amount > 0, ErrorCode::SwapFeesAreZero);
+        
         if is_in_out {
             protocol_fees_to_redeem = self.protocol_base_fees_to_redeem.checked_add(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
-            let base_amount_after_fees = swap_amount.checked_sub(providers_fees_to_redeem).unwrap().checked_sub(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
+            let base_amount_after_fees = swap_amount.checked_sub(providers_fee_amount).unwrap().checked_sub(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
             (new_base_liquidity, new_quote_liquidity) = self.calculate_afterswap_liquidity(base_amount_after_fees, true).ok_or(ErrorCode::AfterswapCalculationFailed)?;
             amount_to_withdraw = self.quote_liquidity.checked_sub(new_quote_liquidity).ok_or(ErrorCode::SwapOverflowError)?;
         }
         else{
             protocol_fees_to_redeem = self.protocol_quote_fees_to_redeem.checked_add(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
-            let quote_amount_after_fees = swap_amount.checked_sub(providers_fees_to_redeem).unwrap().checked_sub(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
+            let quote_amount_after_fees = swap_amount.checked_sub(providers_fee_amount).unwrap().checked_sub(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;
             (new_base_liquidity, new_quote_liquidity) = self.calculate_afterswap_liquidity(quote_amount_after_fees, false).ok_or(ErrorCode::AfterswapCalculationFailed)?;
             amount_to_withdraw = self.base_liquidity.checked_sub(new_base_liquidity).ok_or(ErrorCode::SwapOverflowError)?;
         }
@@ -397,7 +400,7 @@ impl CpAmm {
             new_base_liquidity,
             new_quote_liquidity,
             protocol_fees_to_redeem,
-            providers_fees_to_redeem,
+            providers_fee_amount,
             amount_to_withdraw,
             is_in_out,
         ))
@@ -561,11 +564,11 @@ impl CpAmm {
         self.quote_liquidity = swap_payload.quote_liquidity;
         if swap_payload.is_in_out{
             self.protocol_base_fees_to_redeem = swap_payload.protocol_fees_to_redeem;
-            self.base_liquidity += swap_payload.providers_fees_to_redeem
+            self.base_liquidity += swap_payload.providers_fee_amount
         }
         else{
             self.protocol_quote_fees_to_redeem = swap_payload.protocol_fees_to_redeem;
-            self.quote_liquidity += swap_payload.providers_fees_to_redeem
+            self.quote_liquidity += swap_payload.providers_fee_amount
         }
         self.constant_product_sqrt = Self::calculate_constant_product_sqrt(self.base_liquidity, self.quote_liquidity).unwrap();
         self.base_quote_ratio_sqrt = Self::calculate_base_quote_ratio_sqrt(self.base_liquidity, self.quote_liquidity).unwrap();
@@ -1160,7 +1163,7 @@ mod cp_amm_tests {
             assert_eq!(payload.base_liquidity, initial_base_liquidity + base_amount - protocol_fee - providers_fee);
             assert_eq!(payload.quote_liquidity, initial_quote_liquidity - estimated_result);
             assert_eq!(payload.protocol_fees_to_redeem, protocol_fee);
-            assert_eq!(payload.providers_fees_to_redeem, providers_fee);
+            assert_eq!(payload.providers_fee_amount, providers_fee);
             assert_eq!(payload.amount_to_withdraw, estimated_result);
             assert!(payload.is_in_out);
         }
@@ -1196,7 +1199,7 @@ mod cp_amm_tests {
             assert_eq!(payload.base_liquidity, initial_base_liquidity - estimated_result);
             assert_eq!(payload.quote_liquidity, initial_quote_liquidity + quote_amount - protocol_fee - providers_fee);
             assert_eq!(payload.protocol_fees_to_redeem, protocol_fee);
-            assert_eq!(payload.providers_fees_to_redeem, providers_fee);
+            assert_eq!(payload.providers_fee_amount, providers_fee);
             assert_eq!(payload.amount_to_withdraw, estimated_result);
             assert!(!payload.is_in_out);
         }
@@ -1405,8 +1408,8 @@ impl WithdrawPayload {
 /// # Fields
 /// - `base_liquidity`: The updated base token liquidity in the pool.
 /// - `quote_liquidity`: The updated quote token liquidity in the pool.
-/// - `protocol_fees_to_redeem`: The protocol fees collected from the swap.
-/// - `providers_fees_to_redeem`: The providers fees collected from the swap.
+/// - `protocol_fees_to_redeem`: The protocol fees to redeem updated with fees collected from the swap.
+/// - `providers_fee_amount`: The providers fees collected from the swap.
 /// - `amount_to_withdraw`: The amount of tokens to withdraw after the swap.
 /// - `is_in_out`: Indicates whether the swap is "in-to-out" (true) or "out-to-in" (false).
 #[derive(Debug)]
@@ -1414,7 +1417,7 @@ pub struct SwapPayload {
     base_liquidity: u64,
     quote_liquidity: u64,
     protocol_fees_to_redeem: u64,
-    providers_fees_to_redeem: u64,
+    providers_fee_amount: u64,
     amount_to_withdraw: u64,
     is_in_out: bool,
 }
@@ -1425,16 +1428,16 @@ impl SwapPayload {
     /// # Parameters
     /// - `base_liquidity`: The updated base token liquidity.
     /// - `quote_liquidity`: The updated quote token liquidity.
-    /// - `protocol_fees_to_redeem`: The protocol fees collected during the swap.
-    /// - `providers_fees_to_redeem`: The providers fees collected from the swap.
+    /// - `protocol_fees_to_redeem`: The protocol fees to redeem updated with fees collected from the swap.
+    /// - `providers_fee_amount`: The providers fees collected from the swap.
     /// - `amount_to_withdraw`: The amount of tokens withdrawn.
     /// - `is_in_out`: Indicates the direction of the swap.
-    fn new(base_liquidity: u64, quote_liquidity: u64, protocol_fees_to_redeem: u64, providers_fees_to_redeem: u64, amount_to_withdraw: u64, is_in_out: bool) -> Self {
+    fn new(base_liquidity: u64, quote_liquidity: u64, protocol_fees_to_redeem: u64, providers_fee_amount: u64, amount_to_withdraw: u64, is_in_out: bool) -> Self {
         Self{
             base_liquidity,
             quote_liquidity,
             protocol_fees_to_redeem,
-            providers_fees_to_redeem,
+            providers_fee_amount,
             amount_to_withdraw,
             is_in_out,
         }
@@ -1585,7 +1588,7 @@ mod payloads_tests {
         assert_eq!(payload.base_liquidity, 4000);
         assert_eq!(payload.quote_liquidity, 5000);
         assert_eq!(payload.protocol_fees_to_redeem, 6000);
-        assert_eq!(payload.providers_fees_to_redeem, 6500);
+        assert_eq!(payload.providers_fee_amount, 6500);
         assert_eq!(payload.amount_to_withdraw, 7000);
         assert!(payload.is_in_out);
 

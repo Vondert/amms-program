@@ -96,9 +96,9 @@ impl<'info> SwapInCpAmm<'info>{
             TransferTokensInstruction::try_new(
                 in_amount,
                 &self.base_mint,
-                self.signer_base_account.to_account_info(),
+                &self.signer_base_account,
                 self.signer.to_account_info(),
-                self.cp_amm_base_vault.to_account_info(),
+                &self.cp_amm_base_vault,
                 &self.base_token_program
             )
         }
@@ -106,9 +106,9 @@ impl<'info> SwapInCpAmm<'info>{
             TransferTokensInstruction::try_new(
                 in_amount,
                 &self.quote_mint,
-                self.signer_quote_account.to_account_info(),
+                &self.signer_quote_account,
                 self.signer.to_account_info(),
-                self.cp_amm_quote_vault.to_account_info(),
+                &self.cp_amm_quote_vault,
                 &self.base_token_program
             )
         }
@@ -118,9 +118,9 @@ impl<'info> SwapInCpAmm<'info>{
             TransferTokensInstruction::try_new(
                 in_amount,
                 &self.quote_mint,
-                self.cp_amm_quote_vault.to_account_info(),
+                &self.cp_amm_quote_vault,
                 self.cp_amm.to_account_info(),
-                self.signer_quote_account.to_account_info(),
+                &self.signer_quote_account,
                 &self.quote_token_program
             )
 
@@ -129,9 +129,9 @@ impl<'info> SwapInCpAmm<'info>{
             TransferTokensInstruction::try_new(
                 in_amount,
                 &self.base_mint,
-                self.cp_amm_base_vault.to_account_info(),
+                &self.cp_amm_base_vault,
                 self.cp_amm.to_account_info(),
-                self.signer_base_account.to_account_info(),
+                &self.signer_base_account,
                 &self.quote_token_program
             )
         }
