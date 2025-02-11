@@ -109,7 +109,7 @@ impl<'info> SwapInCpAmm<'info>{
                 &self.signer_quote_account,
                 self.signer.to_account_info(),
                 &self.cp_amm_quote_vault,
-                &self.base_token_program
+                &self.quote_token_program
             )
         }
     }
@@ -132,7 +132,7 @@ impl<'info> SwapInCpAmm<'info>{
                 &self.cp_amm_base_vault,
                 self.cp_amm.to_account_info(),
                 &self.signer_base_account,
-                &self.quote_token_program
+                &self.base_token_program
             )
         }
     }

@@ -373,11 +373,13 @@ impl CpAmm {
         require!(estimated_result > 0, ErrorCode::EstimatedResultIsZero);
         require!(providers_fee_rate_basis_points + protocol_fee_rate_basis_points <= 10000, ErrorCode::ConfigFeeRateExceeded);
 
-        let (new_base_liquidity, new_quote_liquidity, amount_to_withdraw, protocol_fees_to_redeem);
         let providers_fee_amount = Self::calculate_fee_amount(swap_amount, providers_fee_rate_basis_points);
+        require!(providers_fee_amount > 0 || providers_fee_rate_basis_points == 0, ErrorCode::SwapFeesAreZero);
+
         let protocol_fee_amount = Self::calculate_fee_amount(swap_amount, protocol_fee_rate_basis_points);
+        require!(protocol_fee_amount > 0 || protocol_fee_rate_basis_points == 0, ErrorCode::SwapFeesAreZero);
         
-        require!(providers_fee_amount > 0 && protocol_fee_amount > 0, ErrorCode::SwapFeesAreZero);
+        let (new_base_liquidity, new_quote_liquidity, amount_to_withdraw, protocol_fees_to_redeem);
         
         if is_in_out {
             protocol_fees_to_redeem = self.protocol_base_fees_to_redeem.checked_add(protocol_fee_amount).ok_or(ErrorCode::SwapOverflowError)?;

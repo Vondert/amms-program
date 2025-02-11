@@ -28,14 +28,14 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     ///
     /// - This value is used to ensure the AMM adheres to the constant product rule with minimal deviation.
     /// - Defined as a `Q64_128` value representing a tolerance of `0.0001%`.
-    const SWAP_CONSTANT_PRODUCT_SQRT_TOLERANCE: Q64_128 = Q64_128::from_bits(0, 34028236692093846346337460743176);
+    const SWAP_CONSTANT_PRODUCT_SQRT_TOLERANCE: Q64_128 = Q64_128::from_bits(0, 340282366920938463463374607431768);
 
     /// The tolerance for liquidity ratio sqrt after adjusting.
     ///
     /// - Similar to `SWAP_CONSTANT_PRODUCT_SQRT_TOLERANCE`, this constant defines the allowable deviation
     ///   when recalculating the liquidity ratio of the pool.
     /// - Defined as a `Q64_128` value representing a tolerance of `0.00001%`.
-    const ADJUST_LIQUIDITY_RATIO_SQRT_TOLERANCE: Q64_128 = Q64_128::from_bits(0, 3402823669209384634633746074317);
+    const ADJUST_LIQUIDITY_RATIO_SQRT_TOLERANCE: Q64_128 = Q64_128::from_bits(0, 34028236692093846346337460743176);
 
     /// Calculates the initial LP token supply and locked liquidity during pool launch.
     ///
@@ -619,7 +619,7 @@ mod tests {
 
             let new_base_liquidity = 5_000_000;
             let new_quote_liquidity = 4_000_000;
-            let invalid_base_liquidity = 4_999_999;
+            let invalid_base_liquidity = 4_999_990;
 
             let result = amm.validate_swap_constant_product(new_base_liquidity, new_quote_liquidity);
             let invalid_result = amm.validate_swap_constant_product(invalid_base_liquidity, new_quote_liquidity);
@@ -674,7 +674,7 @@ mod tests {
                 Just(1 << 32),
             ]
         }
-        
+
         proptest! {
             #![proptest_config(ProptestConfig::with_cases(1000))]
 

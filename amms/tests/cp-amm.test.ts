@@ -1529,6 +1529,106 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
         // Swap CpAmm
 
+        it("Swap base to quote in CpAmm with exceeding slippage should fail", async() => {
+            const [cpAmmAccountBefore] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm2[0])
+            ]);
+            const [baseMint, quoteMint] = await Promise.all([
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.baseMint),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint),
+            ]);
+
+            const swapBaseAmount = BigInt(1_242_344);
+            const isInOut = true;
+            // Invalid result to check slippage
+            const estimatedResult = BigInt(2593581);
+            // Slippage exceeded by 2
+            const allowedSlippage = BigInt(0);
+
+
+            const input: SwapInCpAmmInput = {
+                baseMint: cpAmmAccountBefore.data.baseMint,
+                quoteMint: cpAmmAccountBefore.data.quoteMint,
+                ammsConfig: cpAmmAccountBefore.data.ammsConfig,
+                cpAmm: cpAmmAccountBefore.address,
+                cpAmmBaseVault: cpAmmAccountBefore.data.baseVault,
+                cpAmmQuoteVault: cpAmmAccountBefore.data.quoteVault,
+                signer: generalUser,
+                signerBaseAccount: GENERAL_USER_TOKEN_ACCOUNTS.validToken2.address,
+                signerQuoteAccount: GENERAL_USER_TOKEN_ACCOUNTS.validToken3.address,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                baseTokenProgram: baseMint.programAddress,
+                quoteTokenProgram: quoteMint.programAddress,
+                swapAmount: swapBaseAmount,
+                isInOut,
+                estimatedResult,
+                allowedSlippage
+            };
+
+            const ix = getSwapInCpAmmInstruction(input);
+
+            await (pipe(
+                await createTransaction(rpcClient, owner, [ix]),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            ).then(
+                async (signature) => {
+                    console.log(await getTransactionLogs(rpcClient, signature));
+                    assert.fail("Expected failure of swap base to quote in CpAmm with exceeding slippage");
+                },
+                (_error) => {}
+            ));
+        })
+
+        it("Swap base to quote in CpAmm that drains base liquidity should fail", async() => {
+            const [cpAmmAccountBefore] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm2[0])
+            ]);
+            const [baseMint, quoteMint] = await Promise.all([
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.baseMint),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint),
+            ]);
+            // After 5% fees 2_559_996_000_001
+            const swapQuoteAmount = BigInt(2_694_732_631_580);
+            const isInOut = false;
+            const estimatedResult = BigInt(640_000);
+            const allowedSlippage = BigInt(0);
+
+
+            const input: SwapInCpAmmInput = {
+                baseMint: cpAmmAccountBefore.data.baseMint,
+                quoteMint: cpAmmAccountBefore.data.quoteMint,
+                ammsConfig: cpAmmAccountBefore.data.ammsConfig,
+                cpAmm: cpAmmAccountBefore.address,
+                cpAmmBaseVault: cpAmmAccountBefore.data.baseVault,
+                cpAmmQuoteVault: cpAmmAccountBefore.data.quoteVault,
+                signer: generalUser,
+                signerBaseAccount: GENERAL_USER_TOKEN_ACCOUNTS.validToken2.address,
+                signerQuoteAccount: GENERAL_USER_TOKEN_ACCOUNTS.validToken3.address,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                baseTokenProgram: baseMint.programAddress,
+                quoteTokenProgram: quoteMint.programAddress,
+                swapAmount: swapQuoteAmount,
+                isInOut,
+                estimatedResult,
+                allowedSlippage
+            };
+
+            const ix = getSwapInCpAmmInstruction(input);
+
+            await (pipe(
+                await createTransaction(rpcClient, owner, [ix]),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            ).then(
+                async (signature) => {
+                    console.log(await getTransactionLogs(rpcClient, signature));
+                    assert.fail("Expected failure of swap base to quote in CpAmm with exceeding slippage");
+                },
+                (_error) => {}
+            ));
+        })
+
         it("Swap base to quote in CpAmm with two token mints", async () => {
             const [cpAmmAccountBefore, signerBaseBalanceBefore, signerQuoteBalanceBefore] = await Promise.all([
                 fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm2[0]),
@@ -1579,7 +1679,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             await pipe(
                 await createTransaction(rpcClient, owner, [ix]),
                 (tx) => signAndSendTransaction(rpcClient, tx)
-            ).catch((error) => console.log(error));
+            );
 
             const [cpAmmAccountAfter, signerBaseBalanceAfter, signerQuoteBalanceAfter, cpAmmBaseBalanceAfter, cpAmmQuoteBalanceAfter] = await Promise.all([
                 fetchCpAmm(rpcClient.rpc, cpAmmAccountBefore.address),
@@ -1624,6 +1724,207 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, { value: [ [ 16462419620470434942n, 2823589378402813650n, 1n ] ] }, "Base quote ratio does not match expected value");
             assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, { value: [ [ 1819616245600884935n, 2825593252532761162n, 1621693n ] ] }, "Constant product does not match expected value");
 
+        })
+
+        it("Swap quote to base in CpAmm with two token mints", async () => {
+            const [cpAmmAccountBefore, signerBaseBalanceBefore, signerQuoteBalanceBefore] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm2[0]),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken2.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken3.address).send()
+            ]);
+            const [ammsConfig, baseMint, quoteMint, cpAmmBaseBalanceBefore, cpAmmQuoteBalanceBefore] = await Promise.all([
+                fetchAmmsConfig(rpcClient.rpc, cpAmmAccountBefore.data.ammsConfig),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.baseMint),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.baseVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.quoteVault).send()
+            ]);
+
+            const swapQuoteAmount = BigInt(10_000);
+            const protocolFee = swapQuoteAmount * BigInt(ammsConfig.data.protocolFeeRateBasisPoints) / BigInt(10_000);
+            const providersFee = swapQuoteAmount * BigInt(ammsConfig.data.providersFeeRateBasisPoints) / BigInt(10_000);
+
+            //9_500
+            const swapQuoteAmountAfterFees = swapQuoteAmount - providersFee - protocolFee;
+
+            const isInOut = false;
+            const allowedSlippage = BigInt(0);
+            const estimatedResult = BigInt(12547);
+
+            const input: SwapInCpAmmInput = {
+                baseMint: cpAmmAccountBefore.data.baseMint,
+                quoteMint: cpAmmAccountBefore.data.quoteMint,
+                ammsConfig: cpAmmAccountBefore.data.ammsConfig,
+                cpAmm: cpAmmAccountBefore.address,
+                cpAmmBaseVault: cpAmmAccountBefore.data.baseVault,
+                cpAmmQuoteVault: cpAmmAccountBefore.data.quoteVault,
+                signer: user,
+                signerBaseAccount: USER_TOKEN_ACCOUNTS.validToken2.address,
+                signerQuoteAccount: USER_TOKEN_ACCOUNTS.validToken3.address,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                baseTokenProgram: baseMint.programAddress,
+                quoteTokenProgram: quoteMint.programAddress,
+                swapAmount: swapQuoteAmount,
+                isInOut,
+                estimatedResult,
+                allowedSlippage
+            };
+
+            const ix = getSwapInCpAmmInstruction(input);
+
+            await pipe(
+                await createTransaction(rpcClient, owner, [ix]),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            );
+
+            const [cpAmmAccountAfter, signerBaseBalanceAfter, signerQuoteBalanceAfter, cpAmmBaseBalanceAfter, cpAmmQuoteBalanceAfter] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, cpAmmAccountBefore.address),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken2.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken3.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.baseVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.quoteVault).send()
+            ]);
+
+            assert.strictEqual(BigInt(signerBaseBalanceAfter.value.amount) - BigInt(signerBaseBalanceBefore.value.amount), estimatedResult, "Signer base balance does not match expected value");
+            assert.strictEqual(BigInt(signerQuoteBalanceBefore.value.amount) - BigInt(signerQuoteBalanceAfter.value.amount), swapQuoteAmount, "Signer quote balance does not match expected value");
+
+            assert.strictEqual(BigInt(cpAmmBaseBalanceBefore.value.amount) - BigInt(cpAmmBaseBalanceAfter.value.amount), estimatedResult, "CpAmm base balance does not match expected value");
+            assert.strictEqual(BigInt(cpAmmQuoteBalanceAfter.value.amount) - BigInt(cpAmmQuoteBalanceBefore.value.amount), swapQuoteAmount, "CpAmm quote balance does not match expected value");
+
+            assert.strictEqual(cpAmmAccountBefore.data.ammsConfig, cpAmmAccountAfter.data.ammsConfig,  "AMMs config address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseMint, cpAmmAccountAfter.data.baseMint, "Base mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lpMint, cpAmmAccountAfter.data.lpMint, "LP mint address should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountBefore.data.baseVault, cpAmmAccountAfter.data.baseVault, "Base vault address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteVault, cpAmmAccountAfter.data.quoteVault, "Quote vault address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVault, cpAmmAccountAfter.data.lockedLpVault, "LP vault address should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountBefore.data.protocolBaseFeesToRedeem, cpAmmAccountAfter.data.protocolBaseFeesToRedeem, "Protocol base fees should remain unchanged");
+            assert.strictEqual(cpAmmAccountAfter.data.protocolQuoteFeesToRedeem - cpAmmAccountBefore.data.protocolQuoteFeesToRedeem, protocolFee, "Protocol quote fees do not match expected value");
+
+            assert.strictEqual(cpAmmAccountBefore.data.bump[0], cpAmmAccountAfter.data.bump[0], "Bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseVaultBump[0], cpAmmAccountAfter.data.baseVaultBump[0], "Base vault bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteVaultBump[0], cpAmmAccountAfter.data.quoteVaultBump[0], "Quote vault bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVaultBump[0], cpAmmAccountAfter.data.lockedLpVaultBump[0], "Locked LP vault bump value should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
+            assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
+
+            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, cpAmmAccountBefore.data.initialLockedLiquidity, `Initial locked liquidity should remain unchanged`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, cpAmmAccountBefore.data.lpTokensSupply, `LP token supply should remain unchanged`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity - cpAmmAccountBefore.data.quoteLiquidity, swapQuoteAmountAfterFees + providersFee, `Quote liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity - cpAmmAccountBefore.data.quoteLiquidity - swapQuoteAmountAfterFees, providersFee, "Collected quote providers fees doesn't match");
+            assert.strictEqual(cpAmmAccountBefore.data.baseLiquidity - cpAmmAccountAfter.data.baseLiquidity, estimatedResult, `Base liquidity does not match expected value`);
+
+            assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, { value: [ [ 981210672925062376n, 2677888769883179920n, 1n ] ] }, "Base quote ratio does not match expected value");
+            assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, { value: [ [ 1445108222790535087n, 15020363657084373912n, 1621921n ] ] }, "Constant product does not match expected value");
+
+        })
+
+        it("Swap quote to base in CpAmm with token mints and token 2022 mint with TransferFee Config extension", async () => {
+            const [cpAmmAccountBefore, signerBaseBalanceBefore, signerQuoteBalanceBefore] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, TEST_CP_AMMS.cpAmm3[0]),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken2.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.transferFeeToken22.address).send()
+            ]);
+            const [ammsConfig, baseMint, quoteMint, cpAmmBaseBalanceBefore, cpAmmQuoteBalanceBefore] = await Promise.all([
+                fetchAmmsConfig(rpcClient.rpc, cpAmmAccountBefore.data.ammsConfig),
+                fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.baseMint),
+                fetchMint22(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.baseVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.quoteVault).send()
+            ]);
+
+            const quoteAmountBeforeTransfer = BigInt(1_522_710_696);
+
+            const transferFee = (quoteMint.data.extensions as Some<Extension[]>).value.find((extension) => extension.__kind == "TransferFeeConfig").olderTransferFee;
+            const tokenSwapFee = (quoteAmountBeforeTransfer * BigInt(transferFee.transferFeeBasisPoints) / BigInt(10_000)) < BigInt(transferFee.maximumFee)
+                ? (quoteAmountBeforeTransfer * BigInt(transferFee.transferFeeBasisPoints) / BigInt(10_000))
+                : BigInt(transferFee.maximumFee);
+
+            const swapQuoteAmount = quoteAmountBeforeTransfer - tokenSwapFee;
+
+            const protocolFee = swapQuoteAmount * BigInt(ammsConfig.data.protocolFeeRateBasisPoints) / BigInt(10_000);
+            const providersFee = swapQuoteAmount  * BigInt(ammsConfig.data.providersFeeRateBasisPoints) / BigInt(10_000);
+
+            //1_446_565_663
+            const swapQuoteAmountAfterFees = swapQuoteAmount - providersFee - protocolFee;
+
+            const isInOut = false;
+            const allowedSlippage = BigInt(0);
+            const estimatedResult = BigInt(8039884568);
+
+            const input: SwapInCpAmmInput = {
+                baseMint: cpAmmAccountBefore.data.baseMint,
+                quoteMint: cpAmmAccountBefore.data.quoteMint,
+                ammsConfig: cpAmmAccountBefore.data.ammsConfig,
+                cpAmm: cpAmmAccountBefore.address,
+                cpAmmBaseVault: cpAmmAccountBefore.data.baseVault,
+                cpAmmQuoteVault: cpAmmAccountBefore.data.quoteVault,
+                signer: user,
+                signerBaseAccount: USER_TOKEN_ACCOUNTS.validToken2.address,
+                signerQuoteAccount: USER_TOKEN_ACCOUNTS.transferFeeToken22.address,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+                systemProgram: SYSTEM_PROGRAM_ADDRESS,
+                baseTokenProgram: baseMint.programAddress,
+                quoteTokenProgram: quoteMint.programAddress,
+                swapAmount: quoteAmountBeforeTransfer,
+                isInOut,
+                estimatedResult,
+                allowedSlippage
+            };
+
+            const ix = getSwapInCpAmmInstruction(input);
+
+            await pipe(
+                await createTransaction(rpcClient, owner, [ix]),
+                (tx) => signAndSendTransaction(rpcClient, tx)
+            );
+
+            const [cpAmmAccountAfter, signerBaseBalanceAfter, signerQuoteBalanceAfter, cpAmmBaseBalanceAfter, cpAmmQuoteBalanceAfter] = await Promise.all([
+                fetchCpAmm(rpcClient.rpc, cpAmmAccountBefore.address),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.validToken2.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(USER_TOKEN_ACCOUNTS.transferFeeToken22.address).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.baseVault).send(),
+                rpcClient.rpc.getTokenAccountBalance(cpAmmAccountBefore.data.quoteVault).send()
+            ]);
+
+            assert.strictEqual(BigInt(signerBaseBalanceAfter.value.amount) - BigInt(signerBaseBalanceBefore.value.amount), estimatedResult, "Signer base balance does not match expected value");
+            assert.strictEqual(BigInt(signerQuoteBalanceBefore.value.amount) - BigInt(signerQuoteBalanceAfter.value.amount), quoteAmountBeforeTransfer, "Signer quote balance does not match expected value");
+
+            assert.strictEqual(BigInt(cpAmmBaseBalanceBefore.value.amount) - BigInt(cpAmmBaseBalanceAfter.value.amount), estimatedResult, "CpAmm base balance does not match expected value");
+            assert.strictEqual(BigInt(cpAmmQuoteBalanceAfter.value.amount) - BigInt(cpAmmQuoteBalanceBefore.value.amount), swapQuoteAmount, "CpAmm quote balance does not match expected value");
+
+            assert.strictEqual(cpAmmAccountBefore.data.ammsConfig, cpAmmAccountAfter.data.ammsConfig,  "AMMs config address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseMint, cpAmmAccountAfter.data.baseMint, "Base mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteMint, cpAmmAccountAfter.data.quoteMint, "Quote mint address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lpMint, cpAmmAccountAfter.data.lpMint, "LP mint address should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountBefore.data.baseVault, cpAmmAccountAfter.data.baseVault, "Base vault address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteVault, cpAmmAccountAfter.data.quoteVault, "Quote vault address should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVault, cpAmmAccountAfter.data.lockedLpVault, "LP vault address should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountBefore.data.protocolBaseFeesToRedeem, cpAmmAccountAfter.data.protocolBaseFeesToRedeem, "Protocol base fees should remain unchanged");
+            assert.strictEqual(cpAmmAccountAfter.data.protocolQuoteFeesToRedeem - cpAmmAccountBefore.data.protocolQuoteFeesToRedeem, protocolFee, "Protocol quote fees do not match expected value");
+
+            assert.strictEqual(cpAmmAccountBefore.data.bump[0], cpAmmAccountAfter.data.bump[0], "Bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.baseVaultBump[0], cpAmmAccountAfter.data.baseVaultBump[0], "Base vault bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.quoteVaultBump[0], cpAmmAccountAfter.data.quoteVaultBump[0], "Quote vault bump value should remain unchanged");
+            assert.strictEqual(cpAmmAccountBefore.data.lockedLpVaultBump[0], cpAmmAccountAfter.data.lockedLpVaultBump[0], "Locked LP vault bump value should remain unchanged");
+
+            assert.strictEqual(cpAmmAccountAfter.data.isInitialized, true,  "CpAmm should be initialized");
+            assert.strictEqual(cpAmmAccountAfter.data.isLaunched, true,  "CpAmm should be launched");
+
+            assert.strictEqual(cpAmmAccountAfter.data.initialLockedLiquidity, cpAmmAccountBefore.data.initialLockedLiquidity, `Initial locked liquidity should remain unchanged`);
+            assert.strictEqual(cpAmmAccountAfter.data.lpTokensSupply, cpAmmAccountBefore.data.lpTokensSupply, `LP token supply should remain unchanged`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity - cpAmmAccountBefore.data.quoteLiquidity, swapQuoteAmountAfterFees + providersFee, `Quote liquidity does not match expected value`);
+            assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity - cpAmmAccountBefore.data.quoteLiquidity - swapQuoteAmountAfterFees, providersFee, "Collected quote providers fees doesn't match");
+            assert.strictEqual(cpAmmAccountBefore.data.baseLiquidity - cpAmmAccountAfter.data.baseLiquidity, estimatedResult, `Base liquidity does not match expected value`);
+
+            assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, { value: [ [ 13633151984817872298n, 6589568649514524675n, 2n ]  ] }, "Base quote ratio does not match expected value");
+            assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, { value: [ [ 2275439533309780308n, 339741531755323081n, 13908276812984n ] ] }, "Constant product does not match expected value");
         })
 
         // Withdraw CpAmm
