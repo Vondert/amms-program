@@ -1027,7 +1027,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
                 fetchMint(rpcClient.rpc, cpAmmAccountBefore.data.quoteMint)
             ]);
 
-            const baseLiquidity = BigInt(160000);
+            const baseLiquidity = BigInt(159999);
             const quoteLiquidity = BigInt(999999);
 
             const input: LaunchCpAmmInput = {
@@ -1749,7 +1749,7 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
 
             const isInOut = false;
             const allowedSlippage = BigInt(0);
-            const estimatedResult = BigInt(12547);
+            const estimatedResult = BigInt(12546);
 
             const input: SwapInCpAmmInput = {
                 baseMint: cpAmmAccountBefore.data.baseMint,
@@ -1818,8 +1818,8 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             assert.strictEqual(cpAmmAccountAfter.data.quoteLiquidity - cpAmmAccountBefore.data.quoteLiquidity - swapQuoteAmountAfterFees, providersFee, "Collected quote providers fees doesn't match");
             assert.strictEqual(cpAmmAccountBefore.data.baseLiquidity - cpAmmAccountAfter.data.baseLiquidity, estimatedResult, `Base liquidity does not match expected value`);
 
-            assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, { value: [ [ 981210672925062376n, 2677888769883179920n, 1n ] ] }, "Base quote ratio does not match expected value");
-            assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, { value: [ [ 1445108222790535087n, 15020363657084373912n, 1621921n ] ] }, "Constant product does not match expected value");
+            assert.deepStrictEqual(cpAmmAccountAfter.data.baseQuoteRatioSqrt, { value: [ [ 15987902991137401516n, 2677894456575790090n, 1n ] ] }, "Base quote ratio does not match expected value");
+            assert.deepStrictEqual(cpAmmAccountAfter.data.constantProductSqrt, { value: [ [ 7047898065208341957n, 4627779000934118380n, 1621922n ] ] }, "Constant product does not match expected value");
 
         })
 

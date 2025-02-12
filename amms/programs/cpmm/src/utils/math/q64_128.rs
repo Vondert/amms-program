@@ -28,8 +28,9 @@ impl Q64_128 {
 	const FRACTIONAL_MASK: U192 = U192([u64::MAX, u64::MAX, 0]);
 
 	/// The minimal fraction required for rounding.
-	const ROUND_FRACTION: U192 = U192([0, 18446744073709551360, 0]);
-
+	const ROUND_FRACTION: U192 = U192([0, 9223372036854775808, 0]);
+	/*	const ROUND_FRACTION: U192 = U192([0,  18446744073709551360, 0]);*/
+	
 	/// The scaling factor used for converting floating-point values to fixed-point.
 	#[cfg(test)]
 	const FRACTIONAL_SCALE: f64 = 340282366920938463463374607431768211456.0;
@@ -64,6 +65,21 @@ impl Q64_128 {
 		}
 	}
 
+	/// Creates a `Q64_128` instance from an unsigned 128-bit integer.
+	///
+	/// # Parameters
+	/// - `value`: The integer to be converted to a fixed-point value.
+	///
+	/// # Returns
+	/// A `Q64_128` instance representing the integer as a fixed-point number.
+	pub const fn from_u128(value: u128) -> Self {
+		let high = (value >> Self::INTEGER_BITS) as u64;               
+		let mid = (value << Self::INTEGER_BITS >> Self::INTEGER_BITS) as u64;
+		Self {
+			value: U192([0, mid, high]),
+		}
+	}
+	
 	/// Creates a `Q64_128` instance from high and low bits.
 	///
 	/// # Parameters
@@ -102,6 +118,7 @@ impl Q64_128 {
 		}
 		integer
 	}
+	
 	/// Splits the fixed-point value into its integer and fractional components.
 	///
 	/// # Returns

@@ -46,7 +46,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     /// - `Ok((u64, u64))` with the initial LP token supply and locked liquidity.
     /// - `Err(ErrorCode)` if the supply is too small.
     fn calculate_launch_lp_tokens(constant_product_sqrt: Q64_128) -> Result<(u64, u64)> {
-        let lp_tokens_supply = constant_product_sqrt.as_u64_round();
+        let lp_tokens_supply = constant_product_sqrt.as_u64();
         require!(lp_tokens_supply > 0, ErrorCode::LpTokensCalculationFailed);
         let initial_locked_liquidity = Self::INITIAL_LOCKED_LP_TOKENS;
         let difference = lp_tokens_supply
@@ -68,7 +68,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
         let provided_liquidity = new_constant_product_sqrt.checked_sub(self.constant_product_sqrt())?;
 
         let share_from_current_liquidity = provided_liquidity.checked_div(self.constant_product_sqrt())?;
-        let tokens_to_mint = share_from_current_liquidity.checked_mul(Q64_128::from_u64(self.lp_tokens_supply()))?.as_u64_round();
+        let tokens_to_mint = share_from_current_liquidity.checked_mul(Q64_128::from_u64(self.lp_tokens_supply()))?.as_u64();
         if tokens_to_mint == 0{
             return None;
         }
@@ -180,7 +180,7 @@ pub(crate) trait CpAmmCalculate: CpAmmCore {
     #[inline]
     fn calculate_opposite_liquidity(&self, x_liquidity: u64) -> Option<u64> {
         let constant_product = self.constant_product_sqrt().square_as_u128();
-        let opposite_liquidity = (constant_product / x_liquidity as u128) as u64;
+        let opposite_liquidity = (Q64_128::from_u128(constant_product) / Q64_128::from_u128(x_liquidity as u128)).as_u64_round();
         if opposite_liquidity == 0 {
             return None;
         }
@@ -268,7 +268,7 @@ mod tests {
                     quote_liquidity,
                     constant_product_sqrt,
                     base_quote_ratio_sqrt: base_quote_ratio,
-                    lp_tokens_supply: lp_tokens_supply.0 + lp_tokens_supply.1
+                    lp_tokens_supply: lp_tokens_supply.0
                 }
             )
         }
@@ -444,8 +444,8 @@ mod tests {
         /// Tests `calculate_liquidity_from_share` for expected behavior.
         #[test]
         fn test_calculate_liquidity_from_share() {
-            let base_liquidity: u64 = 1_000_000;
-            let quote_liquidity: u64 = 20_000_000;
+            let base_liquidity: u64 = 640_000;
+            let quote_liquidity: u64 = 400_000;
             let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity).unwrap();
 
             let lp_tokens = 2_000;
@@ -458,8 +458,8 @@ mod tests {
                 quote
             );
 
-            let expected_base = ((lp_tokens as f64 / amm.lp_tokens_supply as f64) * amm.base_liquidity as f64).floor() as u64;
-            let expected_quote = ((lp_tokens as f64 / amm.lp_tokens_supply as f64) * amm.quote_liquidity as f64).floor() as u64;
+            let expected_base = ((lp_tokens as f64 / amm.lp_tokens_supply as f64) * amm.base_liquidity as f64).round() as u64;
+            let expected_quote = ((lp_tokens as f64 / amm.lp_tokens_supply as f64) * amm.quote_liquidity as f64).round() as u64;
 
             assert_eq!(
                 base, expected_base,
@@ -478,12 +478,12 @@ mod tests {
         /// Tests `calculate_lp_mint_for_provided_liquidity` for minting LP tokens.
         #[test]
         fn test_calculate_lp_mint_for_provided_liquidity() {
-            let base_liquidity: u64 = 1_000_000;
-            let quote_liquidity: u64 = 20_000_000;
+            let base_liquidity: u64 = 640_000;
+            let quote_liquidity: u64 = 400_000;
             let amm = TestCpAmm::try_new(base_liquidity, quote_liquidity).unwrap();
 
-            let new_base_liquidity = base_liquidity + 1_500;
-            let new_quote_liquidity = quote_liquidity + 3_000;
+            let new_base_liquidity = base_liquidity + 4_000;
+            let new_quote_liquidity = quote_liquidity + 2_500;
 
             let new_constant_product_sqrt = TestCpAmm::calculate_constant_product_sqrt(new_base_liquidity, new_quote_liquidity).unwrap();
             let minted_tokens = amm.calculate_lp_mint_for_provided_liquidity(new_constant_product_sqrt).unwrap();
@@ -530,7 +530,7 @@ mod tests {
             let x_liquidity = 52_334;
             let result = amm.calculate_opposite_liquidity(x_liquidity);
 
-            let expected_opposite = (amm.base_liquidity() * amm.quote_liquidity()) / x_liquidity;
+            let expected_opposite = ((amm.base_liquidity() * amm.quote_liquidity()) as f64 / x_liquidity as f64).round() as u64;
 
             assert_eq!(
                 result.unwrap(), expected_opposite,
@@ -553,10 +553,10 @@ mod tests {
             let (new_base_liquidity2, new_quote_liquidity2) = amm.calculate_afterswap_liquidity(swap_amount, false).unwrap();
 
             let expected_new_base1 = amm.base_liquidity() + swap_amount;
-            let expected_new_quote1 = (amm.base_liquidity() * amm.quote_liquidity()) / expected_new_base1;
+            let expected_new_quote1 = (((amm.base_liquidity() * amm.quote_liquidity()) as f64) / expected_new_base1 as f64).round() as u64;
 
             let expected_new_quote2 = amm.quote_liquidity() + swap_amount;
-            let expected_new_base2 = (amm.base_liquidity() * amm.quote_liquidity()) / expected_new_quote2;
+            let expected_new_base2 = (((amm.base_liquidity() * amm.quote_liquidity()) as f64) / expected_new_quote2 as f64).round() as u64;
 
             assert_eq!(
                 new_base_liquidity1, expected_new_base1,
@@ -731,7 +731,7 @@ mod tests {
                     );
                 } else{
                     let constant_product_sqrt = optional_constant_product_sqrt.unwrap();
-                    let lp_tokens = constant_product_sqrt.as_u64_round();
+                    let lp_tokens = constant_product_sqrt.as_u64();
             
                     if lp_tokens >> 3 >= TestCpAmm::INITIAL_LOCKED_LP_TOKENS {
                         let (launch_liquidity, initial_locked) = TestCpAmm::calculate_launch_lp_tokens(constant_product_sqrt).unwrap();
