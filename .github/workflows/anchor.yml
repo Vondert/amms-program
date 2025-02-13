@@ -30,15 +30,16 @@ jobs:
         run: solana config set --url http:localhost:8899
 
       - name: Install Node.js 23.1.0
+        working-directory: amms/
         run: |
           npm install -g n
           n 23.1.0
-          export PATH="/usr/local/bin:$PATH"
-          node -v
 
       - name: Install npm dependencies
         working-directory: amms/
-        run: npm install
+        run: |
+          export PATH="/usr/local/bin:$PATH"
+          npm install
 
       - name: Build
         working-directory: amms/
@@ -50,4 +51,6 @@ jobs:
 
       - name: Run tests
         working-directory: amms/
-        run: anchor test
+        run: |
+          export PATH="/usr/local/bin:$PATH"
+          anchor test
