@@ -47,4 +47,6 @@ jobs:
 
       - name: Run tests
         working-directory: amms/
-        run: anchor test
+        run: |
+          export PATH="/usr/local/bin:$PATH"
+          anchor test
