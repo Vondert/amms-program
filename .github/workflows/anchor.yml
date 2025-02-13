@@ -20,9 +20,6 @@ jobs:
         run: |
           apt-get update && apt-get install -y openssl libssl-dev
 
-      - name: Check Random Device
-        run: ls -l /dev/random /dev/urandom
-
       - name: Set Rust 1.79.0 as default
         run: rustup default 1.79.0
 
@@ -44,6 +41,9 @@ jobs:
         working-directory: amms/
         run: anchor run generate-clients
 
+      - name: Check Node.js Crypto API
+        run: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
       - name: Run tests
         working-directory: amms/
-        run: anchor test
+        run: node --experimental-global-webcrypto node_modules/.bin/ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'
