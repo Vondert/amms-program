@@ -676,7 +676,7 @@ mod tests {
         }
 
         proptest! {
-            #![proptest_config(ProptestConfig::with_cases(1000))]
+            #![proptest_config(ProptestConfig::with_cases(100000))]
 
             /// Fuzz-test for `calculate_constant_product_sqrt` and `calculate_base_quote_ratio_sqrt`.
             /// Validates that results match the expected values, and edge cases like zero liquidity return `None`.

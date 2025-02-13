@@ -33,6 +33,10 @@ jobs:
         working-directory: amms/
         run: anchor build
 
+      - name: Generate Clients
+        working-directory: amms/
+        run: anchor run generate-clients
+
       - name: Run tests
         working-directory: amms/
         run: anchor test

@@ -1069,7 +1069,7 @@ mod tests {
         	]
 		}
 		proptest! {
-            #![proptest_config(ProptestConfig::with_cases(10000))]
+            #![proptest_config(ProptestConfig::with_cases(100000))]
 
         	/// Tests round-trip type conversion between `f64`, `u64`, and `Q64_128`.
         	#[test]
