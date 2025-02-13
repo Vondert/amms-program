@@ -16,6 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install packages
+        run: |
+          apt-get update && apt-get install -y openssl libssl-dev
+
       - name: Set Rust 1.79.0 as default
         run: rustup default 1.79.0
 
