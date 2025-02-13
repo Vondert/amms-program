@@ -20,6 +20,9 @@ jobs:
         run: |
           apt-get update && apt-get install -y openssl libssl-dev
 
+      - name: Check Random Device
+        run: ls -l /dev/random /dev/urandom
+
       - name: Set Rust 1.79.0 as default
         run: rustup default 1.79.0
 

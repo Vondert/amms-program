@@ -20,8 +20,6 @@ let ammsConfigAddress: ProgramDerivedAddress;
 let lpMint: KeyPairSigner;
 let cpAmmAddress: ProgramDerivedAddress;
 
-
-
 before(async () =>{
     cpmmTestingEnvironment = await createCpmmTestingEnvironment();
     const programAddress = cpmmTestingEnvironment.program.CPMM_PROGRAM_ADDRESS;
