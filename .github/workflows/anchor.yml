@@ -29,6 +29,12 @@ jobs:
       - name: Set solana target cluster to local
         run: solana config set --url http:localhost:8899
 
+      - name: Install Node.js 23.1.0
+        run: |
+          npm install -g n
+          n 23.1.0
+          node -v
+
       - name: Install npm dependencies
         working-directory: amms/
         run: npm install
@@ -41,9 +47,6 @@ jobs:
         working-directory: amms/
         run: anchor run generate-clients
 
-      - name: Check Node.js Crypto API
-        run: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-
       - name: Run tests
         working-directory: amms/
-        run: node --experimental-global-webcrypto node_modules/.bin/ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'
+        run: anchor test
