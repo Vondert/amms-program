@@ -16,14 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: List rustup toolchains
-        run: rustup toolchain list
-
-      - name: Set default toolchain
-        run: rustup default stable
-
-      - name: List rustup toolchains
-        run: rustup toolchain list
+      - name: Set Rust 1.79.0 as default
+        run: rustup default 1.79.0
 
       - name: Generate new keygen
         run: solana-keygen new --no-bip39-passphrase --outfile owner.json
