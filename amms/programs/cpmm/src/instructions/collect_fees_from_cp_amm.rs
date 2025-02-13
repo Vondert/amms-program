@@ -106,9 +106,9 @@ impl<'info> CollectFeesFromCpAmm<'info> {
         TransferTokensInstruction::try_new(
             quote_fees,
             &self.quote_mint,
-            &self.fee_authority_quote_account,
-            self.cp_amm.to_account_info(),
             &self.cp_amm_quote_vault,
+            self.cp_amm.to_account_info(),
+            &self.fee_authority_quote_account,
             &self.quote_token_program
         )
     }

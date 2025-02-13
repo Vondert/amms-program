@@ -344,7 +344,7 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
             ));
         })
 
-        it("Update of AmmsConfig fee authority with malware AmmsConfigManager should fail", async () => {
+        it("Update of AmmsConfig protocol fee rate with malware AmmsConfigManager should fail", async () => {
             const input: UpdateAmmsConfigProtocolFeeRateInput = {
                 authority: headAuthority,
                 ammsConfigsManager: malwareAmmsConfigsManagerAddress[0],
@@ -470,7 +470,7 @@ export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, 
             ));
         })
 
-        it("Update of AmmsConfig fee authority with malware AmmsConfigManager should fail", async () => {
+        it("Update of AmmsConfig providers fee rate with malware AmmsConfigManager should fail", async () => {
             const input: UpdateAmmsConfigProvidersFeeRateInput = {
                 authority: headAuthority,
                 ammsConfigsManager: malwareAmmsConfigsManagerAddress[0],

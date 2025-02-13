@@ -79,13 +79,13 @@ pub struct WithdrawFromCpAmm<'info>{
 }
 
 pub(crate) fn handler(ctx: Context<WithdrawFromCpAmm>, lp_tokens: u64) -> Result<()> {
-
+    let liquidity_burn_instruction = Box::new(ctx.accounts.get_liquidity_burn_instruction(lp_tokens)?);
+    
     let withdraw_payload = ctx.accounts.cp_amm.get_withdraw_payload(lp_tokens)?;
 
     let withdraw_base_liquidity_instruction = Box::new(ctx.accounts.get_withdraw_base_liquidity_transfer_instruction(withdraw_payload.base_withdraw_amount())?);
     let withdraw_quote_liquidity_instruction = Box::new(ctx.accounts.get_withdraw_quote_liquidity_transfer_instruction(withdraw_payload.quote_withdraw_amount())?);
-
-    let liquidity_burn_instruction = Box::new(ctx.accounts.get_liquidity_burn_instruction(lp_tokens));
+    
     liquidity_burn_instruction.execute(None)?;
 
     let cp_amm_seeds = ctx.accounts.cp_amm.seeds();
@@ -115,17 +115,17 @@ impl<'info> WithdrawFromCpAmm<'info>{
         TransferTokensInstruction::try_new(
             quote_liquidity,
             &self.quote_mint,
-            &self.signer_quote_account,
-            self.cp_amm.to_account_info(),
             &self.cp_amm_quote_vault,
+            self.cp_amm.to_account_info(),
+            &self.signer_quote_account,
             &self.quote_token_program
         )
     }
-    fn get_liquidity_burn_instruction(&self, liquidity: u64) -> BurnTokensInstructions<'_, '_, '_, 'info>{
-        BurnTokensInstructions::new(
+    fn get_liquidity_burn_instruction(&self, liquidity: u64) -> Result<BurnTokensInstructions<'_, '_, '_, 'info>>{
+        BurnTokensInstructions::try_new(
             liquidity,
             &self.lp_mint,
-            self.signer_lp_account.to_account_info(),
+            &self.signer_lp_account,
             self.signer.to_account_info(),
             &self.lp_token_program
         )

@@ -118,7 +118,7 @@ pub enum ErrorCode {
     #[msg("Mint with TransferFee extension failed to calculate fee")]
     MintTransferFeeCalculationFailed,
     
-    #[msg("Insufficient balance in the token account to complete the token_instructions.")]
+    #[msg("Insufficient balance in the token account to complete the transfer.")]
     InsufficientBalanceForTransfer,
 
     #[msg("Mint and Token Program mismatch")]

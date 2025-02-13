@@ -393,7 +393,7 @@ impl CpAmm {
             (new_base_liquidity, new_quote_liquidity) = self.calculate_afterswap_liquidity(quote_amount_after_fees, false).ok_or(ErrorCode::AfterswapCalculationFailed)?;
             amount_to_withdraw = self.base_liquidity.checked_sub(new_base_liquidity).ok_or(ErrorCode::SwapOverflowError)?;
         }
-        msg!("{} {} {}", new_base_liquidity, new_quote_liquidity, amount_to_withdraw);
+        
         // Check constant product change is in acceptable range
         self.validate_swap_constant_product(new_base_liquidity, new_quote_liquidity)?;
         Self::check_swap_result(amount_to_withdraw, estimated_result, allowed_slippage)?;

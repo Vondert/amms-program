@@ -1,7 +1,8 @@
 use anchor_lang::context::CpiContext;
 use anchor_lang::prelude::*;
 use anchor_lang::ToAccountInfo;
-use anchor_spl::token::{Mint, Token, Burn, burn};
+use anchor_spl::token::{Mint, Token, Burn, burn, TokenAccount};
+use crate::error::ErrorCode;
 
 /// Represents an instruction to burn tokens from a token account.
 ///
@@ -23,19 +24,20 @@ impl<'at, 'bt, 'ct, 'info> BurnTokensInstructions<'at, 'bt, 'ct, 'info> {
     /// - `from`: The token account from which tokens will be burned.
     /// - `from_authority`: The authority of the token account.
     /// - `token_program`: The SPL token program responsible for handling the burn operation.
-    pub fn new(amount: u64, mint: &Account<'info, Mint>, from: AccountInfo<'info>, from_authority: AccountInfo<'info>, token_program: &Program<'info, Token>) -> Self{
+    pub fn try_new(amount: u64, mint: &Account<'info, Mint>, from: &Account<'info, TokenAccount>, from_authority: AccountInfo<'info>, token_program: &Program<'info, Token>) -> Result<Self>{
+        require!(from.amount >= amount, ErrorCode::InsufficientBalanceForTransfer);
         let cpi_context = CpiContext::new(
             token_program.to_account_info(),
             Burn{
                 mint: mint.to_account_info(),
-                from,
+                from: from.to_account_info(),
                 authority: from_authority,
             }
         );
-        BurnTokensInstructions{
+        Ok(BurnTokensInstructions{
             amount,
             cpi_context,
-        }
+        })
     }
 
 

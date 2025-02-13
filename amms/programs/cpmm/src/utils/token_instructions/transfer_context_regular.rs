@@ -48,7 +48,7 @@ impl<'at, 'bt, 'ct, 'info>  TransferContextRegular<'at, 'bt, 'ct, 'info>  {
         let cpi_context = CpiContext::new(
             token_program.to_account_info(),
             TransferChecked {
-                from: from,
+                from,
                 mint: mint.to_account_info(),
                 to,
                 authority: from_authority,
