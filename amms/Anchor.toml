@@ -5,7 +5,7 @@ resolution = true
 skip-lint = true
 
 [programs.localnet]
-cpmm = "6nyRQDmzjSqorVVVyFN3AnrqKSS2Lg4UHp3DgnFCAj32"
+cpmm = "EFta43Um9GJB1ABsMh18srSEzsq1EbE3k9uU9aL3dsR3"
 
 [registry]
 url = "https://api.apr.dev"
@@ -19,4 +19,6 @@ generate-clients = "yarn ts-node ./scripts/generate-clients.ts"
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 
 [test]
+startup_wait = 5000
+shutdown_wait = 2000
 upgradeable = true
