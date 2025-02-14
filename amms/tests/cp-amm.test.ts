@@ -29,10 +29,11 @@ import {
 } from "../clients/js/src/generated";
 import {
     CpmmTestingEnvironment, createTestUser, createTransaction,
-    getCpAmmPDA, getCpAmmVaultPDA, getToken22PDA, getTokenPDA, getTransactionLogs,
+    getCpAmmPDA, getCpAmmVaultPDA, getTransactionLogs,
     signAndSendTransaction
 } from "./helpers";
 import {
+    getToken22PDA, getTokenPDA,
     createAtaWithTokens, createAtaWithTokens22,
     createToken22Mint,
     createToken22MintWithPermanentDelegate,
@@ -42,11 +43,17 @@ import {
 import * as program from "../clients/js/src/generated";
 
 
+/**
+ * CpAmm tests function.
+ */
 export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsConfigAddress: ProgramDerivedAddress) =>{
     describe("\nCpAmm tests", () =>{
         const {rpcClient, rent, headAuthority, owner, user} = cpmmTestingEnvironment;
         let generalUser: KeyPairSigner;
 
+        /**
+         * Stores test data for CpAmms.
+         */
         const TEST_CP_AMMS: {
             lpMint1: KeyPairSigner,
             cpAmm1: ProgramDerivedAddress,
@@ -80,6 +87,12 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             quoteVault3: undefined,
             lpVault3: undefined,
         };
+
+
+        /**
+         * Stores test data for various token mints including standard SPL tokens
+         * and Token-2022 variations with different configurations.
+         */
         const TEST_MINTS: {
             validTokenMint1: Account<TokenMint>,
             validTokenMint2: Account<TokenMint>,
@@ -99,6 +112,11 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             transferFeeToken2022Mint: undefined,
             permanentDelegateToken2022Mint: undefined
         };
+
+        /**
+         * Stores token accounts belonging to the primary user.
+         * Used to track token balances and interactions within the CpAmm.
+         */
         const USER_TOKEN_ACCOUNTS: {
             validToken1: Account<TokenAccount>,
             validToken2: Account<TokenAccount>,
@@ -120,6 +138,11 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             lpToken2: undefined,
             lpToken3: undefined
         };
+
+        /**
+         * Stores token accounts belonging to a secondary general user.
+         * Used for testing interactions between multiple users in CpAmm.
+         */
         const GENERAL_USER_TOKEN_ACCOUNTS: {
             validToken1: Account<TokenAccount>,
             validToken2: Account<TokenAccount>,
@@ -142,6 +165,9 @@ export const cpAmmTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsC
             lpToken3: undefined
         };
 
+        /**
+         * Stores token accounts related to fee authorities.
+         */
         const FEE_AUTHORITY_TOKEN_ACCOUNTS: {
             validToken1: ProgramDerivedAddress,
             validToken2: ProgramDerivedAddress,

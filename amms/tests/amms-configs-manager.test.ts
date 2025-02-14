@@ -15,6 +15,9 @@ import {
     UpdateAmmsConfigsManagerHeadAuthorityInput
 } from "../clients/js/src/generated";
 
+/**
+ * AmmsConfigsManager tests function.
+ */
 export const ammsConfigsManagerTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsConfigsManagerAddress: ProgramDerivedAddress) =>{
     describe("\nAmmsConfigsManager tests", () =>{
         const {program, programDataAddress, rpcClient, rent, headAuthority, owner, ammsConfigsManagerAuthority, user} = cpmmTestingEnvironment;

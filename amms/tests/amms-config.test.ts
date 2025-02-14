@@ -26,13 +26,25 @@ import {
 } from "../clients/js/src/generated";
 import {SYSTEM_PROGRAM_ADDRESS} from "@solana-program/system";
 import {assert} from "chai";
-export const ammsConfigTests = (cpmmTestingEnvironment: CpmmTestingEnvironment, ammsConfigsManagerAddress: ProgramDerivedAddress, ammsConfigAddress: ProgramDerivedAddress) =>{
-    describe("\nAmmsConfig tests", () =>{
-        const {program, rpcClient, rent, headAuthority, owner, ammsConfigsManagerAuthority, user} = cpmmTestingEnvironment;
+
+/**
+ * AmmsConfig tests function.
+ */
+export const ammsConfigTests = (
+    cpmmTestingEnvironment: CpmmTestingEnvironment,
+    ammsConfigsManagerAddress: ProgramDerivedAddress,
+    ammsConfigAddress: ProgramDerivedAddress
+) => {
+    describe("\nAmmsConfig tests", () => {
+        const { program, rpcClient, rent, headAuthority, owner, ammsConfigsManagerAuthority, user } = cpmmTestingEnvironment;
         let feeAuthority: KeyPairSigner;
         let malwareAmmsConfigsManagerAddress: ProgramDerivedAddress;
-        before(async () =>{
+
+        before(async () => {
+            // Create a test user to act as fee authority
             feeAuthority = await createTestUser(rpcClient, 100);
+
+            // Generate an invalid AMMs Configs Manager address for test validation
             malwareAmmsConfigsManagerAddress = await getProgramDerivedAddress({
                 programAddress: program.CPMM_PROGRAM_ADDRESS,
                 seeds: ["ammss_configs_manager"]
