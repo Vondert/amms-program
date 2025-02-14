@@ -39,7 +39,7 @@ jobs:
 
       - name: Build
         working-directory: amms/
-        run: anchor build
+        run: anchor keys sync && anchor build
 
       - name: Generate Clients
         working-directory: amms/
